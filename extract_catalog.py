@@ -6,7 +6,8 @@ Run this once (or whenever the source PDF changes) to produce:
                            exact embedded-image position (native quality where
                            a single image matches, a tight rendered crop otherwise)
 
-The Streamlit app (main.py) only reads this saved data; it never parses the PDF itself.
+These helpers can also be imported by the Streamlit app to extract directly from
+an uploaded PDF (no separate extraction script step required).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,15 @@ from catalog_common import (
 )
 
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "data"
+
+
+def prepare_output_dirs(output_dir: Path, clean_output: bool = False) -> Path:
+	output_dir.mkdir(parents=True, exist_ok=True)
+	images_dir = output_dir / "images"
+	if clean_output and images_dir.exists():
+		shutil.rmtree(images_dir)
+	images_dir.mkdir(parents=True, exist_ok=True)
+	return images_dir
 
 
 def default_pdf_path() -> Path | None:
@@ -84,6 +95,51 @@ def parse_code_only(text: str) -> str | None:
 	if index != len(lines):
 		return None
 	return "".join(code_lines) if code_lines else None
+
+
+def looks_like_criteria_text(text: str) -> bool:
+	text = compact_whitespace(text).lower()
+	if not text:
+		return False
+	return bool(
+		re.search(
+			r"(?:^|\b)(hold the position|points of contact|arm position|grip|leg position|body position|rotation|criteria|refer to|apply|angle away|minimum)(?:\b|:)",
+			text,
+		)
+	)
+
+
+def looks_like_criteria_field(text: str) -> bool:
+	text = compact_whitespace(text).lower()
+	if not text:
+		return False
+	return bool(
+		re.match(
+			r"^(hold the position|points of contact|arm position|grip|leg position|body position|rotation|criteria)(:|$)",
+			text,
+		)
+	)
+
+
+def normalize_criteria_lines(text: str) -> list[str]:
+	lines = [compact_whitespace(line) for line in text.splitlines() if compact_whitespace(line)]
+	if not lines:
+		return []
+
+	normalized: list[str] = []
+	for line in lines:
+		line = re.sub(r"^[\-•]\s*", "", line)
+		if not line:
+			continue
+		if not normalized:
+			normalized.append(line)
+			continue
+		if looks_like_criteria_field(line) or looks_like_criteria_field(normalized[-1]):
+			normalized.append(line)
+		else:
+			normalized[-1] = f"{normalized[-1]} {line}"
+
+	return [compact_whitespace(line) for line in normalized]
 
 
 def sanitize_filename(code_number: str) -> str:
@@ -238,13 +294,20 @@ def extract_page_records(document: fitz.Document, page_index: int, images_dir: P
 			for block in blocks
 			if start_block["y0"] <= block["y0"] < region_bottom and 40 <= block["x0"] < 180 and block is not start_block
 		]
+		name_blocks: list[dict[str, Any]] = []
 		for left_block in left_blocks:
 			parsed_extra = parse_code_and_name(left_block["text"])
-			if parsed_extra:
+			if parsed_extra or parse_code_only(left_block["text"]):
 				continue
-			if parse_code_only(left_block["text"]):
+			if looks_like_criteria_text(left_block["text"]):
 				continue
-			name = compact_whitespace(f"{name} {' '.join(left_block['text'].splitlines())}")
+			if left_block["y0"] - start_block["y0"] > 50:
+				continue
+			name_blocks.append(left_block)
+
+		if name_blocks:
+			name_parts = [name, *[block["text"] for block in sorted(name_blocks, key=lambda item: item["y0"])] ]
+			name = compact_whitespace(" ".join(name_parts))
 
 		if not name:
 			continue
@@ -257,16 +320,18 @@ def extract_page_records(document: fitz.Document, page_index: int, images_dir: P
 		criteria_blocks = [
 			block
 			for block in blocks
-			if region_top <= block["y0"] < region_bottom and block["x0"] >= 345 and compact_whitespace(block["text"])
+			if region_top <= block["y0"] < region_bottom and (block["x0"] >= 345 or looks_like_criteria_text(block["text"]))
 		]
+		criteria_blocks = [
+			block
+			for block in criteria_blocks
+			if block is not start_block and block not in name_blocks and compact_whitespace(block["text"])
+		]
+		criteria_blocks.sort(key=lambda block: (block["y0"], block["x0"]))
 
 		technical_value = "\n".join(block["text"].strip() for block in tech_blocks)
 		criteria_text = "\n".join(block["text"].strip() for block in criteria_blocks)
-		criteria_lines = [
-			compact_whitespace(line.lstrip("- "))
-			for line in criteria_text.splitlines()
-			if compact_whitespace(line)
-		]
+		criteria_lines = normalize_criteria_lines(criteria_text)
 		numeric_values = [float(value) for value in VALUE_RE.findall(technical_value)]
 
 		if not numeric_values or not criteria_lines:
@@ -299,12 +364,7 @@ def extract_page_records(document: fitz.Document, page_index: int, images_dir: P
 	return records
 
 
-def build_catalog(pdf_path: Path, output_dir: Path) -> list[dict[str, Any]]:
-	output_dir.mkdir(parents=True, exist_ok=True)
-	images_dir = output_dir / "images"
-	images_dir.mkdir(parents=True, exist_ok=True)
-
-	document = fitz.open(pdf_path)
+def _build_catalog_from_document(document: fitz.Document, images_dir: Path) -> list[dict[str, Any]]:
 	records: list[dict[str, Any]] = []
 	seen_codes: set[str] = set()
 
@@ -320,6 +380,27 @@ def build_catalog(pdf_path: Path, output_dir: Path) -> list[dict[str, Any]]:
 
 	records.sort(key=lambda item: (item["section"], code_sort_key(item["code_number"])))
 	return records
+
+
+def build_catalog(pdf_path: Path, output_dir: Path, clean_output: bool = False) -> list[dict[str, Any]]:
+	images_dir = prepare_output_dirs(output_dir, clean_output=clean_output)
+	with fitz.open(pdf_path) as document:
+		return _build_catalog_from_document(document, images_dir)
+
+
+def build_catalog_from_pdf_bytes(pdf_bytes: bytes, output_dir: Path, clean_output: bool = False) -> list[dict[str, Any]]:
+	images_dir = prepare_output_dirs(output_dir, clean_output=clean_output)
+	with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
+		return _build_catalog_from_document(document, images_dir)
+
+
+def write_catalog(records: list[dict[str, Any]], source_pdf_name: str, output_dir: Path) -> Path:
+	catalog_path = output_dir / "catalog.json"
+	catalog_path.write_text(
+		json.dumps({"source_pdf": source_pdf_name, "elements": records}, indent=2),
+		encoding="utf-8",
+	)
+	return catalog_path
 
 
 def main() -> None:
@@ -345,15 +426,11 @@ def main() -> None:
 	if pdf_path is None or not pdf_path.exists():
 		parser.error("No PDF found. Pass a path or place a .pdf file in this folder.")
 
-	records = build_catalog(pdf_path, args.output_dir)
+	records = build_catalog(pdf_path, args.output_dir, clean_output=True)
 	if not records:
 		parser.error("No compulsory element catalog pages were detected in this PDF.")
 
-	catalog_path = args.output_dir / "catalog.json"
-	catalog_path.write_text(
-		json.dumps({"source_pdf": pdf_path.name, "elements": records}, indent=2),
-		encoding="utf-8",
-	)
+	catalog_path = write_catalog(records, pdf_path.name, args.output_dir)
 	print(f"Extracted {len(records)} elements to {catalog_path}")
 
 

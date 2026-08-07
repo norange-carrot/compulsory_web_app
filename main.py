@@ -1,7 +1,8 @@
-"""Part 2: browse the already-extracted catalog (see extract_catalog.py) and build a printable selection.
+"""Part 2: browse the extracted catalog and build a printable selection.
 
-This app never parses the PDF itself -- it only reads data/catalog.json and data/images/*,
-which are produced by running `python extract_catalog.py` once.
+You can either:
+1) Run extract_catalog.py manually, or
+2) Upload a PDF in this app and extract in one step.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from typing import Any
 import streamlit as st
 
 from catalog_common import code_sort_key, prefix_for_code
+from extract_catalog import build_catalog_from_pdf_bytes, write_catalog
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
@@ -359,7 +361,7 @@ def render_export_html(records: list[dict[str, Any]], profile: dict[str, Any], s
 	.element-image {{ width: 100%; max-height: 280px; object-fit: contain; margin-top: 12px; border-radius: 8px; background: var(--panel); }}
 	ul {{ padding-left: 20px; line-height: 1.45; }}
 	.criteria {{ margin-top: 12px; line-height: 1.45; }}
-	.criteria-line {{ margin: 0 0 8px; }}
+	.criteria-line {{ margin: 0 0 8px; padding-left: 0.2em; }}
 	@page {{ size: A4 portrait; margin: 14mm; }}
 	@media print {{
 	  .cards {{ grid-template-columns: 1fr; }}
@@ -399,13 +401,41 @@ def render_export_html(records: list[dict[str, Any]], profile: dict[str, Any], s
 def main() -> None:
 	st.set_page_config(page_title="Code of Points Helper", layout="wide")
 	st.title("Code of Points Helper")
-	st.caption("Browse the extracted compulsory elements, shortlist them, and export a printable selection.")
+	st.caption("Upload/extract a Code of Points PDF, shortlist compulsory elements, and export a printable selection.")
+
+	st.sidebar.header("Catalog Source")
+	uploaded_pdf = st.sidebar.file_uploader("Upload Code of Points PDF", type=["pdf"])
+	if st.sidebar.button("Extract Uploaded PDF", use_container_width=True):
+		if uploaded_pdf is None:
+			st.sidebar.warning("Choose a PDF file first.")
+		else:
+			pdf_bytes = uploaded_pdf.getvalue()
+			if not pdf_bytes:
+				st.sidebar.error("The uploaded PDF appears to be empty.")
+			else:
+				with st.spinner("Extracting catalog from uploaded PDF..."):
+					try:
+						records = build_catalog_from_pdf_bytes(pdf_bytes, DATA_DIR, clean_output=True)
+					except Exception as exc:
+						st.sidebar.error(f"Extraction failed: {exc}")
+					else:
+						if not records:
+							st.sidebar.error("No compulsory catalog pages were detected in the uploaded PDF.")
+						else:
+							source_name = uploaded_pdf.name or "uploaded.pdf"
+							write_catalog(records, source_name, DATA_DIR)
+							for key in list(st.session_state):
+								if key.startswith("selected::"):
+									del st.session_state[key]
+							st.cache_data.clear()
+							st.sidebar.success(f"Extracted {len(records)} elements from {source_name}.")
+							st.rerun()
 
 	catalog = load_catalog()
 	if catalog is None:
 		st.error(
 			f"No extracted catalog found at `{catalog_path()}`. "
-			"Run `python extract_catalog.py` first to generate it from the PDF."
+			"Upload a PDF in the sidebar and click 'Extract Uploaded PDF', or run `python extract_catalog.py`."
 		)
 		return
 
@@ -495,7 +525,7 @@ def main() -> None:
 				st.markdown(f"**Technical value**: {record['technical_value'].replace(chr(10), ' / ')}")
 				st.markdown("**Criteria**")
 				for line in record["criteria_lines"]:
-					st.write(line)
+					st.markdown(f"- {line}")
 			st.divider()
 
 	st.divider()

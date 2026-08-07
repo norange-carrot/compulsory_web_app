@@ -8,22 +8,26 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## How it works (two parts)
+## How it works
 
 - **Part 1 -- `extract_catalog.py`**: reads the source PDF (a `.pdf` file in this
   folder) and saves everything the app needs into `data/`:
   - `data/catalog.json` -- text fields (code, name, technical value, criteria, etc.) for every element
   - `data/images/*` -- the illustration for each element
-- **Part 2 -- `main.py`**: a Streamlit app that only reads `data/catalog.json`
-  and `data/images/`. It never opens the PDF itself.
+- **Part 2 -- `main.py`**: a Streamlit app that reads `data/catalog.json`
+  and `data/images/`.
+  - You can upload a PDF in the sidebar and extract automatically in one step.
+  - Or you can still run `extract_catalog.py` manually.
 
-Run Part 1 once, then Part 2 any time. Re-run Part 1 whenever the source PDF changes.
+Run extraction whenever the source PDF changes.
 
 ## Run
 
 ```bash
-python extract_catalog.py   # Part 1: PDF -> data/catalog.json + data/images/
-streamlit run main.py       # Part 2: browse/select elements in the browser
+streamlit run main.py       # upload+extract in app OR browse existing extracted data
+
+# optional manual extraction path:
+python extract_catalog.py   # PDF -> data/catalog.json + data/images/
 ```
 
 ## Disclaimer
