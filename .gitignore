@@ -1,3 +1,11 @@
 data/
 __pycache__/
 ipsf_pole_sports_code_of*
+*.py[cod]
+.venv/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.env

@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version and create changelog
+        id: cz
+        uses: commitizen-tools/commitizen-action@0.24.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          changelog_increment_filename: body.md
+
+      - name: Create GitHub release
+        if: steps.cz.outputs.version_bumped == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: body.md
+          tag_name: v${{ steps.cz.outputs.version }}
