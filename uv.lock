@@ -299,6 +299,15 @@ wheels = [
 ]
 
 [[package]]
+name = "fizz"
+version = "4.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/81/dd/68f267bb733d8bec1003c572ace5d490ab0efcc8d83b3393a33e372d67aa/fizz-4.2.0.tar.gz", hash = "sha256:267309dfe0ed4a3c27505891333c404c2bb7794e85788cd92eb6bd41c4fb7b10", size = 2939, upload-time = "2021-09-26T16:37:19.564Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/34/850c9077155e445f3eac3ad69137bd95d6d9b9882fa96b35a3546a93a311/fizz-4.2.0-py3-none-any.whl", hash = "sha256:464ced9a3ae8fff37b665e927de6d9551fde4bac1d472ca9350b98944308a51e", size = 3170, upload-time = "2021-09-26T16:37:18.13Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -871,6 +880,7 @@ name = "python-template"
 version = "0.2.1"
 source = { editable = "." }
 dependencies = [
+    { name = "fizz" },
     { name = "streamlit" },
 ]
 
@@ -884,7 +894,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "streamlit", specifier = ">=1.62.0" }]
+requires-dist = [
+    { name = "fizz", specifier = ">=4.2.0" },
+    { name = "streamlit", specifier = ">=1.62.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [
