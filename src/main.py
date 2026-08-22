@@ -441,7 +441,7 @@ def render_export_html(
 
 def _clear_selected_records() -> None:
     for key in list(st.session_state):
-        if key.startswith("selected::"):
+        if isinstance(key, str) and key.startswith("selected::"):
             del st.session_state[key]
 
 
