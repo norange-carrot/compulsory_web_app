@@ -1,3 +1,9 @@
+## v0.2.2 (2026-08-22)
+
+### Refactor
+
+- please linter
+
 ## v0.2.1 (2026-08-20)
 
 ### Refactor
