@@ -28,6 +28,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           changelog_increment_filename: body.md
+          no_raise: "21"
 
       - name: Create GitHub release
         if: steps.cz.outputs.version_bumped == 'true'
