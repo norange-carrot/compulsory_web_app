@@ -31,7 +31,7 @@ jobs:
           no_raise: "21"
 
       - name: Create GitHub release
-        if: steps.cz.outputs.version_bumped == 'true'
+        if: env.REVISION != env.PREVIOUS_REVISION
         uses: softprops/action-gh-release@v2
         with:
           body_path: body.md

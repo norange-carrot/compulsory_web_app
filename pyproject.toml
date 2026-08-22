@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fizz>=4.2.0",
+    "PyMuPDF",
     "streamlit>=1.62.0",
 ]
 
