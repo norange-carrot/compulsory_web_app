@@ -5,7 +5,6 @@ description = "Template for my personal projects"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fizz>=4.2.0",
     "PyMuPDF",
     "streamlit>=1.62.0",
 ]
@@ -27,11 +26,15 @@ packages = ["src/python_template"]
 [dependency-groups]
 dev = [
     "commitizen>=4.9.1",
+    "deptry>=0.25.1",
     "pre-commit>=4.0.0",
     "pytest>=9.1.1",
     "ruff>=0.16.2",
     "ty>=0.0.69",
 ]
+
+[tool.deptry]
+extend_exclude = ["tasks.py"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
