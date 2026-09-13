@@ -1,3 +1,9 @@
+## v0.2.3 (2026-09-13)
+
+### Fix
+
+- **#4**: extract all elements
+
 ## v0.2.2 (2026-08-22)
 
 ### Refactor
