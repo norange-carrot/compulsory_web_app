@@ -69,3 +69,6 @@ ignore = [
 testpaths = ["tests"]
 
 [tool.ty]
+
+[tool.ty.environment]
+root = ["./src"]
