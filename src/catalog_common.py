@@ -7,6 +7,10 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 SECTION_LABELS = {
     "SYN": "Synchronised Parallel",
@@ -27,6 +31,7 @@ DOUBLES_PREFIXES = ("SYN", "BLN", "FLY", "PSE", "FLR")
 CODE_FRAGMENT_RE = re.compile(r"^[A-Z]{1,4}[0-9]+[A-Z0-9/]*[a-z]?$")
 VALUE_RE = re.compile(r"([0-9]+(?:\.[0-9]+)?)")
 DEADLIFT_VARIANT_RE = re.compile(r"([abc])\s*-\s*([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
+CODE_NUMBER_RE = re.compile(r"^([A-Za-z]+)(\d+)[a-z]?$")
 
 
 def compact_whitespace(value: str) -> str:
@@ -71,3 +76,28 @@ def tracks_for_code(code_number: str) -> set[str]:
 
 def parse_numeric_values(technical_value: str) -> list[float]:
     return [float(value) for value in VALUE_RE.findall(technical_value)]
+
+
+def find_code_gaps(code_numbers: Iterable[str]) -> dict[str, list[int]]:
+    """Find missing numbers within each code prefix's observed range.
+
+    Element numbering (e.g. F1, F2, F3...) should be consecutive within a
+    prefix; a hole here almost always means extraction dropped a row.
+    Combined codes ("DL1/ADL1") and deadlift-style letter variants ("DL1a")
+    are decomposed to their base prefix/number first.
+    """
+    numbers_by_prefix: dict[str, set[int]] = {}
+    for code_number in code_numbers:
+        for part in code_number.split("/"):
+            match = CODE_NUMBER_RE.match(part)
+            if not match:
+                continue
+            prefix, number = match.groups()
+            numbers_by_prefix.setdefault(prefix, set()).add(int(number))
+
+    gaps: dict[str, list[int]] = {}
+    for prefix, numbers in numbers_by_prefix.items():
+        missing = [n for n in range(min(numbers), max(numbers) + 1) if n not in numbers]
+        if missing:
+            gaps[prefix] = missing
+    return gaps
