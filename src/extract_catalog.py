@@ -26,7 +26,7 @@ from typing import Any
 
 import fitz
 
-from src.catalog_common import (
+from catalog_common import (
     DEADLIFT_VARIANT_RE,
     VALUE_RE,
     code_sort_key,
@@ -41,6 +41,8 @@ DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "data"
 MAX_IMAGE_SIZE = 8
 MIN_CLIP_HEIGHT = 10
 MIN_PAGE_TEXT_Y = 70
+MERGE_VERTICAL_GAP_MAX = 5
+MERGE_HORIZONTAL_OFFSET_MAX = 10
 CODE_COLUMN_X_MIN = 40
 CODE_COLUMN_X_MAX = 180
 NAME_BLOCK_MAX_Y_OFFSET = 50
@@ -128,9 +130,11 @@ def looks_like_criteria_text(text: str) -> bool:
     text = compact_whitespace(text).lower()
     if not text:
         return False
+    # "grip" alone is a common word in element names (e.g. "Flag Grip Side"),
+    # so it only counts as a criteria marker when used as a field label ("grip:").
     return bool(
         re.search(
-            r"(?:^|\b)(hold the position|points of contact|arm position|grip|"
+            r"(?:^|\b)(hold the position|points of contact|arm position|grip\s*:|"
             r"leg position|body position|rotation|criteria|refer to|apply|"
             r"angle away|minimum)(?:\b|:)",
             text,
@@ -289,29 +293,74 @@ def _page_text_blocks(page: fitz.Page) -> list[dict[str, Any]]:
         cleaned = text.strip()
         if not cleaned or y0 < MIN_PAGE_TEXT_Y or y1 > page.rect.height - 40:
             continue
-        blocks.append({"x0": x0, "y0": y0, "x1": x1, "y1": y1, "text": cleaned})
+        embedded_value = None
+        # Left-column blocks sometimes merge a name (or its wrap continuation)
+        # with the "Tech. Value" cell on a trailing line instead of it being
+        # its own block; split that value out so it isn't lost or treated as text.
+        if x0 < TECHNICAL_VALUE_COLUMN_X_MIN:
+            lines = [
+                compact_whitespace(line)
+                for line in cleaned.splitlines()
+                if compact_whitespace(line)
+            ]
+            if len(lines) > 1 and VALUE_RE.fullmatch(lines[-1]):
+                embedded_value = lines[-1]
+                cleaned = "\n".join(lines[:-1])
+        blocks.append(
+            {
+                "x0": x0,
+                "y0": y0,
+                "x1": x1,
+                "y1": y1,
+                "text": cleaned,
+                "embedded_value": embedded_value,
+            }
+        )
 
     blocks.sort(key=lambda block: (block["y0"], block["x0"]))
     return blocks
 
 
 def _catalog_start_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
+    candidates = [
         block
         for block in blocks
         if block["x0"] < CODE_COLUMN_X_MAX
         and (parse_code_and_name(block["text"]) or parse_code_only(block["text"]))
     ]
 
+    # A code number can occasionally be split across two adjacent, touching
+    # blocks by the PDF layout (e.g. "DL7/A" then "DL7" instead of one
+    # "DL7/ \nADL7" block); splice those back into a single start block so the
+    # code parses correctly instead of producing two bogus/partial rows.
+    merged: list[dict[str, Any]] = []
+    for block in candidates:
+        previous = merged[-1] if merged else None
+        if (
+            previous is not None
+            and parse_code_only(previous["text"])
+            and parse_code_only(block["text"])
+            and block["y0"] - previous["y1"] < MERGE_VERTICAL_GAP_MAX
+            and abs(block["x0"] - previous["x0"]) < MERGE_HORIZONTAL_OFFSET_MAX
+        ):
+            merged[-1] = {
+                **previous,
+                "text": f"{previous['text']}\n{block['text']}",
+                "y1": block["y1"],
+            }
+            continue
+        merged.append(block)
+    return merged
+
 
 def _row_region(
     starts: list[dict[str, Any]], index: int, page_height: float
 ) -> tuple[float, float, float]:
     start_block = starts[index]
-    previous_start_y = starts[index - 1]["y0"] if index > 0 else 84
+    previous_start_y = starts[index - 1]["y0"] if index > 0 else MIN_PAGE_TEXT_Y
     next_start_y = starts[index + 1]["y0"] if index + 1 < len(starts) else page_height - 24
-    midpoint_top = (previous_start_y + start_block["y0"]) / 2 if index > 0 else 84
-    region_top = max(84, min(midpoint_top, start_block["y0"] - 90))
+    midpoint_top = (previous_start_y + start_block["y0"]) / 2 if index > 0 else MIN_PAGE_TEXT_Y
+    region_top = max(MIN_PAGE_TEXT_Y, min(midpoint_top, start_block["y0"] - 90))
     region_bottom = (
         (start_block["y0"] + next_start_y) / 2 if index + 1 < len(starts) else page_height - 24
     )
@@ -327,12 +376,18 @@ def _parse_start_block(start_block: dict[str, Any]) -> tuple[str, str] | None:
 
 
 def _name_blocks_for_row(
-    blocks: list[dict[str, Any]], start_block: dict[str, Any], region_bottom: float
+    blocks: list[dict[str, Any]],
+    start_block: dict[str, Any],
+    region_top: float,
+    region_bottom: float,
 ) -> list[dict[str, Any]]:
+    # Name-wrap continuation blocks can occasionally be placed just above the
+    # start block's own y0 (PDF layout quirk), so scan the whole row window
+    # rather than only below the start block.
     left_blocks = [
         block
         for block in blocks
-        if start_block["y0"] <= block["y0"] < region_bottom
+        if region_top <= block["y0"] < region_bottom
         and CODE_COLUMN_X_MIN <= block["x0"] < CODE_COLUMN_X_MAX
         and block is not start_block
     ]
@@ -342,7 +397,7 @@ def _name_blocks_for_row(
             continue
         if looks_like_criteria_text(left_block["text"]):
             continue
-        if left_block["y0"] - start_block["y0"] > NAME_BLOCK_MAX_Y_OFFSET:
+        if abs(left_block["y0"] - start_block["y0"]) > NAME_BLOCK_MAX_Y_OFFSET:
             continue
         name_blocks.append(left_block)
     return name_blocks
@@ -425,7 +480,7 @@ def _extract_row_record(
     midpoint_top, region_top, region_bottom = _row_region(
         context.starts, index, context.page.rect.height
     )
-    name_blocks = _name_blocks_for_row(context.blocks, start_block, region_bottom)
+    name_blocks = _name_blocks_for_row(context.blocks, start_block, region_top, region_bottom)
     name = _row_name(name, name_blocks)
     if not name:
         return None
@@ -433,6 +488,17 @@ def _extract_row_record(
     technical_value, criteria_text, criteria_lines, numeric_values = _row_content(
         context.blocks, start_block, region_top, region_bottom, name_blocks
     )
+    if not numeric_values:
+        # The tech-value cell is occasionally merged into the start/name block
+        # instead of being its own column block; fall back to those values.
+        embedded_values = [
+            block["embedded_value"]
+            for block in (start_block, *name_blocks)
+            if block.get("embedded_value")
+        ]
+        if embedded_values:
+            technical_value = "\n".join(embedded_values)
+            numeric_values = [float(value) for value in embedded_values]
     if not numeric_values or not criteria_lines:
         return None
 

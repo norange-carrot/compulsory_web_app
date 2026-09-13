@@ -22,8 +22,8 @@ import streamlit as st
 if TYPE_CHECKING:
     from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-from src.catalog_common import code_sort_key, prefix_for_code
-from src.extract_catalog import build_catalog_from_pdf_bytes, write_catalog
+from catalog_common import code_sort_key, prefix_for_code
+from extract_catalog import build_catalog_from_pdf_bytes, write_catalog
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 ELITE_AERIAL_DEADLIFT_MIN_VALUE = 0.4
