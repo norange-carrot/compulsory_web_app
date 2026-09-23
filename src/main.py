@@ -2,18 +2,11 @@
 # All Rights Reserved.
 # Licensed under the MIT.
 
-"""Part 2: browse the extracted catalog and build a printable selection.
-
-You can either:
-1) Run extract_catalog.py manually, or
-2) Upload a PDF in this app and extract in one step.
-"""
-
 from __future__ import annotations
 
 import base64
 import html
-import json
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,10 +16,11 @@ if TYPE_CHECKING:
     from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from catalog_common import code_sort_key, prefix_for_code
-from extract_catalog import build_catalog_from_pdf_bytes, write_catalog
+from extract_catalog import build_catalog_from_pdf_bytes
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
 ELITE_AERIAL_DEADLIFT_MIN_VALUE = 0.4
+CATALOG_STATE_KEY = "catalog_records"
+SOURCE_STATE_KEY = "catalog_source"
 
 
 PROFILE_RULES: dict[str, dict[str, Any]] = {
@@ -202,31 +196,15 @@ PROFILE_RULES: dict[str, dict[str, Any]] = {
 }
 
 
-def catalog_path() -> Path:
-    return DATA_DIR / "catalog.json"
-
-
-@st.cache_data(show_spinner=False)
-def parse_catalog_json(catalog_json_text: str) -> tuple[list[dict[str, Any]], str]:
-    payload = json.loads(catalog_json_text)
-    return payload["elements"], payload.get("source_pdf", "unknown.pdf")
-
-
-def load_catalog() -> tuple[list[dict[str, Any]], str] | None:
-    path = catalog_path()
-    if not path.exists():
-        return None
-    return parse_catalog_json(path.read_text(encoding="utf-8"))
-
-
-def image_bytes_for(record: dict[str, Any]) -> bytes | None:
-    image_path = record.get("image_path")
-    if not image_path:
-        return None
-    full_path = DATA_DIR / image_path
-    if not full_path.exists():
-        return None
-    return full_path.read_bytes()
+def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
+    """Extract the catalog from PDF bytes, loading images into memory only."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_dir = Path(tmp_dir)
+        records = build_catalog_from_pdf_bytes(pdf_bytes, output_dir, clean_output=True)
+        for record in records:
+            image_path = record.pop("image_path", None)
+            record["image_bytes"] = (output_dir / image_path).read_bytes() if image_path else None
+    return records
 
 
 def profile_details(category: str, division: str) -> dict[str, Any]:
@@ -319,7 +297,7 @@ def render_export_html(
     cards = []
     for record in records:
         image_html = ""
-        image_data = image_bytes_for(record)
+        image_data = record.get("image_bytes")
         if image_data:
             image_b64 = base64.b64encode(image_data).decode("ascii")
             image_html = (
@@ -455,7 +433,7 @@ def _handle_uploaded_pdf(uploaded_pdf: UploadedFile | None) -> None:
         return
     with st.spinner("Extracting catalog from uploaded PDF..."):
         try:
-            records = build_catalog_from_pdf_bytes(pdf_bytes, DATA_DIR, clean_output=True)
+            records = extract_catalog_from_pdf(pdf_bytes)
         except Exception as exc:  # noqa: BLE001
             st.sidebar.error(f"Extraction failed: {exc}")
             return
@@ -463,9 +441,9 @@ def _handle_uploaded_pdf(uploaded_pdf: UploadedFile | None) -> None:
         st.sidebar.error("No compulsory catalog pages were detected in the uploaded PDF.")
         return
     source_name = uploaded_pdf.name or "uploaded.pdf"
-    write_catalog(records, source_name, DATA_DIR)
+    st.session_state[CATALOG_STATE_KEY] = records
+    st.session_state[SOURCE_STATE_KEY] = source_name
     _clear_selected_records()
-    st.cache_data.clear()
     st.sidebar.success(f"Extracted {len(records)} elements from {source_name}.")
     st.rerun()
 
@@ -512,7 +490,7 @@ def _render_element_browser(records: list[dict[str, Any]], max_results: int) -> 
             st.caption(f"Section: {record['section']}")
             st.caption(f"Page: {record['page_number']}")
         with image_col:
-            image_data = image_bytes_for(record)
+            image_data = record.get("image_bytes")
             if image_data:
                 st.image(image_data, use_container_width=True)
             else:
@@ -592,21 +570,16 @@ def main() -> None:
     if st.sidebar.button("Extract Uploaded PDF", use_container_width=True):
         _handle_uploaded_pdf(uploaded_pdf)
 
-    catalog = load_catalog()
-    if catalog is None:
-        st.error(
-            f"No extracted catalog found at `{catalog_path()}`. "
-            "Upload a PDF in the sidebar and click 'Extract Uploaded PDF', or run "
-            "`python extract_catalog.py`."
+    records = st.session_state.get(CATALOG_STATE_KEY)
+    source_name = st.session_state.get(SOURCE_STATE_KEY)
+    if not records:
+        st.info(
+            "Upload a Code of Points PDF in the sidebar and click 'Extract Uploaded PDF' "
+            "to get started."
         )
         return
 
-    records, source_name = catalog
     st.sidebar.info(f"Loaded catalog extracted from: {source_name}")
-
-    if not records:
-        st.error("The extracted catalog is empty. Re-run extract_catalog.py to regenerate it.")
-        return
 
     st.sidebar.header("Compulsory Profile")
     category = st.sidebar.selectbox("Category", list(PROFILE_RULES))
