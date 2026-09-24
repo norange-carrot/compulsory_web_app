@@ -298,6 +298,8 @@ def main() -> None:
 
     records = st.session_state.get(CATALOG_STATE_KEY)
     source_name = st.session_state.get(SOURCE_STATE_KEY)
+    if not isinstance(source_name, str):
+        source_name = "Unknown source"
     if not records:
         st.info(
             "Upload a Code of Points PDF in the sidebar and click 'Extract Uploaded PDF' "
