@@ -86,9 +86,6 @@ PROFILE_RULES: dict[Profile, ProfileRules] = {
             Division.PROFESSIONAL: PROFESSIONAL_DIVISION_RULES,
             Division.ELITE: DivisionRules(element_range=(0.5, 1.0), total_range=(7.7, 11.0)),
         },
-        notes=(
-            "Elite seniors must choose an aerial dead lift with a fourth or higher point value.",
-        ),
     ),
     Profile.MASTERS_SINGLES: ProfileRules(
         track=Track.SINGLES,
@@ -100,9 +97,6 @@ PROFILE_RULES: dict[Profile, ProfileRules] = {
             Division.PROFESSIONAL: PROFESSIONAL_DIVISION_RULES,
             Division.ELITE: DivisionRules(element_range=(0.5, 1.0), total_range=(6.6, 11.0)),
         },
-        notes=(
-            "Elite masters must choose an aerial dead lift with a fourth or higher point value.",
-        ),
     ),
     Profile.JUNIOR_SINGLES: ProfileRules(
         track=Track.SINGLES,
@@ -138,7 +132,6 @@ PROFILE_RULES: dict[Profile, ProfileRules] = {
             Division.INTRO: INTRO_DIVISION_RULES,
             Division.AMATEUR: AMATEUR_DIVISION_RULES,
         },
-        notes=("Pre-Novice does not have Professional or Elite divisions.",),
     ),
     Profile.PARA_POLE: ProfileRules(
         track=Track.SINGLES,
@@ -148,12 +141,6 @@ PROFILE_RULES: dict[Profile, ProfileRules] = {
             Division.AMATEUR: AMATEUR_DIVISION_RULES,
             Division.ELITE: AMATEUR_DIVISION_RULES,
         },
-        notes=(
-            (
-                "Para Pole follows amateur compulsory value ranges with additional tolerance rules "
-                "not yet enforced in this app."
-            ),
-        ),
     ),
     Profile.SENIOR_DOUBLES: ProfileRules(
         track=Track.DOUBLES,
@@ -164,9 +151,6 @@ PROFILE_RULES: dict[Profile, ProfileRules] = {
             Division.PROFESSIONAL: PROFESSIONAL_DIVISION_RULES,
             Division.ELITE: DivisionRules(element_range=(0.5, 1.0), total_range=(7.7, 11.0)),
         },
-        notes=(
-            "Elite senior doubles must use an aerial dead lift with a fourth or higher point value.",  # noqa: E501
-        ),
     ),
     Profile.JUNIOR_DOUBLES: ProfileRules(
         track=Track.DOUBLES,
@@ -176,7 +160,6 @@ PROFILE_RULES: dict[Profile, ProfileRules] = {
             Division.AMATEUR: AMATEUR_DIVISION_RULES,
             Division.ELITE: PROFESSIONAL_DIVISION_RULES,
         },
-        notes=("Junior doubles does not have Intro or Professional divisions.",),
     ),
     Profile.NOVICE_YOUTH_DOUBLES: ProfileRules(
         track=Track.DOUBLES,
@@ -186,6 +169,5 @@ PROFILE_RULES: dict[Profile, ProfileRules] = {
             Division.AMATEUR: AMATEUR_DIVISION_RULES,
             Division.ELITE: DivisionRules(element_range=(0.3, 0.8), total_range=(4.4, 7.2)),
         },
-        notes=("Novice and Youth doubles do not have Intro or Professional divisions.",),
     ),
 }

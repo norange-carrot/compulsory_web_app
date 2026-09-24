@@ -10,14 +10,12 @@ pip install -r requirements.txt
 
 ## How it works
 
-- **Part 1 -- `extract_catalog.py`**: reads the source PDF (a `.pdf` file in this
-  folder) and saves everything the app needs into `data/`:
-  - `data/catalog.json` -- text fields (code, name, technical value, criteria, etc.) for every element
-  - `data/images/*` -- the illustration for each element
+- **Part 1 -- `extract_catalog.py`**: provides the PDF extraction functions used by
+  the app to process an uploaded source PDF and save everything it needs into
+  `data/`.
 - **Part 2 -- `main.py`**: a Streamlit app that reads `data/catalog.json`
   and `data/images/`.
   - You can upload a PDF in the sidebar and extract automatically in one step.
-  - Or you can still run `extract_catalog.py` manually.
 
 Run extraction whenever the source PDF changes.
 
@@ -25,9 +23,6 @@ Run extraction whenever the source PDF changes.
 
 ```bash
 streamlit run main.py       # upload+extract in app OR browse existing extracted data
-
-# optional manual extraction path:
-python extract_catalog.py   # PDF -> data/catalog.json + data/images/
 ```
 
 ## Disclaimer

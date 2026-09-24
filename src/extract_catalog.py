@@ -2,29 +2,19 @@
 # All Rights Reserved.
 # Licensed under the MIT.
 
-"""Part 1: read the IPSF Code of Points PDF and save its content to disk.
-
-Run this once (or whenever the source PDF changes) to produce:
-  - data/catalog.json  -- text fields for every parsed compulsory element
-  - data/images/*       -- the illustration for each element, extracted at its
-                           exact embedded-image position (native quality where
-                           a single image matches, a tight rendered crop otherwise)
-
-These helpers can also be imported by the Streamlit app to extract directly from
-an uploaded PDF (no separate extraction script step required).
-"""
+"""Provide PDF extraction helpers for the Streamlit application."""
 
 from __future__ import annotations
 
-import argparse
-import json
 import re
 import shutil
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import fitz
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from catalog_common import (
     DEADLIFT_VARIANT_RE,
@@ -37,7 +27,6 @@ from catalog_common import (
     tracks_for_code,
 )
 
-DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "data"
 MAX_IMAGE_SIZE = 8
 MIN_CLIP_HEIGHT = 10
 MIN_PAGE_TEXT_Y = 70
@@ -71,12 +60,6 @@ def prepare_output_dirs(output_dir: Path, *, clean_output: bool = False) -> Path
         shutil.rmtree(images_dir)
     images_dir.mkdir(parents=True, exist_ok=True)
     return images_dir
-
-
-def default_pdf_path() -> Path | None:
-    workspace = Path(__file__).resolve().parent
-    candidates = sorted(workspace.glob("*.pdf"))
-    return candidates[0] if candidates else None
 
 
 def page_is_catalog(page: fitz.Page) -> bool:
@@ -561,59 +544,7 @@ def _build_catalog_from_document(document: fitz.Document, images_dir: Path) -> l
     return records
 
 
-def build_catalog(
-    pdf_path: Path, output_dir: Path, *, clean_output: bool = False
-) -> list[dict[str, Any]]:
-    images_dir = prepare_output_dirs(output_dir, clean_output=clean_output)
-    with fitz.open(pdf_path) as document:
-        return _build_catalog_from_document(document, images_dir)
-
-
-def build_catalog_from_pdf_bytes(
-    pdf_bytes: bytes, output_dir: Path, *, clean_output: bool = False
-) -> list[dict[str, Any]]:
-    images_dir = prepare_output_dirs(output_dir, clean_output=clean_output)
+def build_catalog_from_pdf_bytes(pdf_bytes: bytes, output_dir: Path) -> list[dict[str, Any]]:
+    images_dir = prepare_output_dirs(output_dir, clean_output=True)
     with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
         return _build_catalog_from_document(document, images_dir)
-
-
-def write_catalog(records: list[dict[str, Any]], source_pdf_name: str, output_dir: Path) -> None:
-    catalog_path = output_dir / "catalog.json"
-    catalog_path.write_text(
-        json.dumps({"source_pdf": source_pdf_name, "elements": records}, indent=2),
-        encoding="utf-8",
-    )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Extract the IPSF Code of Points catalog from a PDF into JSON + image files."
-    )
-    parser.add_argument(
-        "pdf",
-        nargs="?",
-        type=Path,
-        default=None,
-        help="Path to the source PDF (defaults to the bundled .pdf file in this folder).",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help="Directory to write catalog.json and images/ into (default: ./data).",
-    )
-    args = parser.parse_args()
-
-    pdf_path = args.pdf or default_pdf_path()
-    if pdf_path is None or not pdf_path.exists():
-        parser.error("No PDF found. Pass a path or place a .pdf file in this folder.")
-
-    records = build_catalog(pdf_path, args.output_dir, clean_output=True)
-    if not records:
-        parser.error("No compulsory element catalog pages were detected in this PDF.")
-
-    write_catalog(records, pdf_path.name, args.output_dir)
-
-
-if __name__ == "__main__":
-    main()

@@ -29,7 +29,7 @@ def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
     """Extract the catalog from PDF bytes, loading images into memory only."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_dir = Path(tmp_dir)
-        records = build_catalog_from_pdf_bytes(pdf_bytes, output_dir, clean_output=True)
+        records = build_catalog_from_pdf_bytes(pdf_bytes, output_dir)
         for record in records:
             image_path = record.pop("image_path", None)
             record["image_bytes"] = (output_dir / image_path).read_bytes() if image_path else None
