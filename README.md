@@ -5,24 +5,28 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## How it works
 
-- **Part 1 -- `extract_catalog.py`**: provides the PDF extraction functions used by
-  the app to process an uploaded source PDF and save everything it needs into
-  `data/`.
-- **Part 2 -- `main.py`**: a Streamlit app that reads `data/catalog.json`
-  and `data/images/`.
-  - You can upload a PDF in the sidebar and extract automatically in one step.
+- **`extract_catalog.py`** provides the PDF extraction functions used by the app.
+- **`main.py`** is a Streamlit app that lets you upload a source PDF and extract
+  its catalog in one step.
+- Extracted records and image data are kept in the Streamlit session. Images are
+  staged in a temporary directory during extraction and are not persisted as
+  catalog data by the app.
+- A PDF must be uploaded again after the session is restarted; the app does not
+  load a previously extracted `catalog.json` or `images/` directory.
 
-Run extraction whenever the source PDF changes.
+The source PDF is processed in memory, but image extraction currently uses a
+temporary local directory internally. That directory is removed after extraction
+finishes.
 
 ## Run
 
 ```bash
-streamlit run main.py       # upload+extract in app OR browse existing extracted data
+streamlit run src/main.py
 ```
 
 ## Disclaimer
@@ -32,9 +36,7 @@ endorsed by, or sponsored by** the International Pole Sports Federation (IPSF)
 or any other rulebook publisher.
 
 The Code of Points PDF is copyrighted material owned by its publisher. This
-repository does not include or distribute that PDF, nor the `data/catalog.json`
-and `data/images/` extracted from it -- you must supply your own legally
-obtained copy of the PDF and generate that data locally by running
-`extract_catalog.py`. Only the extraction/viewing code in this repository is
-distributed; the rulebook content itself remains the property of its original
-publisher.
+repository does not include or distribute that PDF. You must supply your own
+legally obtained copy and upload it to the app. Only the extraction and viewing
+code is intended to be distributed; the rulebook content itself remains the
+property of its original publisher.
