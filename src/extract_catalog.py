@@ -53,10 +53,10 @@ class _PageExtractionContext:
     starts: list[dict[str, Any]]
 
 
-def prepare_output_dirs(output_dir: Path, *, clean_output: bool = False) -> Path:
+def prepare_output_dirs(output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     images_dir = output_dir / "images"
-    if clean_output and images_dir.exists():
+    if images_dir.exists():
         shutil.rmtree(images_dir)
     images_dir.mkdir(parents=True, exist_ok=True)
     return images_dir
@@ -545,6 +545,6 @@ def _build_catalog_from_document(document: fitz.Document, images_dir: Path) -> l
 
 
 def build_catalog_from_pdf_bytes(pdf_bytes: bytes, output_dir: Path) -> list[dict[str, Any]]:
-    images_dir = prepare_output_dirs(output_dir, clean_output=True)
+    images_dir = prepare_output_dirs(output_dir)
     with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
         return _build_catalog_from_document(document, images_dir)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from catalog_common import find_code_gaps
+from src.catalog_common import find_code_gaps
 
 CATALOG_JSON_PATH = Path(__file__).resolve().parents[2] / "src" / "data" / "catalog.json"
 

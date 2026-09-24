@@ -36,7 +36,7 @@ dev = [
 
 [tool.deptry]
 extend_exclude = ["tasks.py"]
-known_first_party = ["catalog_common", "extract_catalog", "main", "profile_rules"]
+known_first_party = ["app", "catalog_common", "catalog_filter", "extract_catalog", "main", "profile_rules"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
