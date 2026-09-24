@@ -21,6 +21,7 @@ from extract_catalog import build_catalog_from_pdf_bytes
 ELITE_AERIAL_DEADLIFT_MIN_VALUE = 0.4
 CATALOG_STATE_KEY = "catalog_records"
 SOURCE_STATE_KEY = "catalog_source"
+EXPORT_TEMPLATE_PATH = Path(__file__).with_name("compulsory-selection.html")
 
 
 PROFILE_RULES: dict[str, dict[str, Any]] = {
@@ -335,86 +336,25 @@ def render_export_html(
     requirements_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile["requirements"])
     notes_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile.get("notes", []))
 
-    return f"""
-<!doctype html>
-<html lang=\"en\">
-<head>
-  <meta charset=\"utf-8\">
-  <title>Compulsory Selection</title>
-  <style>
-    :root {{
-      --ink: #1f2933;
-      --muted: #52606d;
-      --line: #d9e2ec;
-      --paper: #fffdf8;
-      --accent: #8d5524;
-      --panel: #f8f5ef;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{ font-family: Georgia, serif; margin: 0; color: var(--ink); background: var(--paper); }}
-    header {{ padding: 28px 40px 12px; border-bottom: 2px solid var(--accent); }}
-    h1 {{ margin: 0 0 8px; font-size: 28px; }}
-    p {{ margin: 4px 0; line-height: 1.45; }}
-    main {{ padding: 24px 40px 40px; }}
-    .summary {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-      margin-bottom: 20px; }}
-    .summary div {{ background: var(--panel); border: 1px solid var(--line); padding: 12px 14px;
-      border-radius: 8px; }}
-        .requirements {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
-            margin-bottom: 28px; }}
-        .requirements section {{ border: 1px solid var(--line); border-radius: 8px;
-            padding: 14px 16px; background: white; }}
-        .cards {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }}
-        .card {{ break-inside: avoid; border: 1px solid var(--line); border-radius: 10px;
-            padding: 16px; background: white; }}
-        .card-header {{ display: flex; justify-content: space-between; gap: 12px;
-            align-items: start; }}
-        .code {{ font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; }}
-        .value {{ font-size: 14px; white-space: pre-line; text-align: right; }}
-        h2 {{ font-size: 20px; margin: 2px 0 0; }}
-        .meta {{ margin-top: 10px; color: var(--muted); font-size: 13px; }}
-        .element-image {{ width: 100%; max-height: 280px; object-fit: contain; margin-top: 12px;
-            border-radius: 8px; background: var(--panel); }}
-        ul {{ padding-left: 20px; line-height: 1.45; }}
-        .criteria {{ margin-top: 12px; line-height: 1.45; }}
-        .criteria-line {{ margin: 0 0 8px; padding-left: 0.2em; }}
-        @page {{ size: A4 portrait; margin: 14mm; }}
-        @media print {{
-            .cards {{ grid-template-columns: 1fr; }}
-            .card {{ page-break-inside: avoid; }}
-        }}
-    </style>
-</head>
-<body>
-    <header>
-        <h1>Compulsory Selection</h1>
-        <p>Source PDF: {html.escape(source_name)}</p>
-        <p>{html.escape(profile["category"])} | {html.escape(profile["division"])} |
-            {html.escape(profile["track"])}</p>
-    </header>
-  <main>
-    <div class=\"summary\">
-      <div><strong>Selected elements</strong><br>{len(records)} /
-        {profile["required_elements"]}</div>
-      <div><strong>Allowed element range</strong><br>{profile["element_range"][0]:.1f} -
-        {profile["element_range"][1]:.1f}</div>
-      <div><strong>Total selected range</strong><br>{total_min:.1f} - {total_max:.1f}</div>
-    </div>
-    <div class=\"requirements\">
-      <section>
-        <h3>Requirements</h3>
-        <ul>{requirements_html}</ul>
-      </section>
-      <section>
-        <h3>Notes</h3>
-        <ul>{notes_html or "<li>No extra notes for this profile.</li>"}</ul>
-      </section>
-    </div>
-    <section class=\"cards\">{"".join(cards)}</section>
-  </main>
-</body>
-</html>
-"""
+    template = EXPORT_TEMPLATE_PATH.read_text(encoding="utf-8")
+    substitutions = {
+        "{{SOURCE_NAME}}": html.escape(source_name),
+        "{{PROFILE_CATEGORY}}": html.escape(profile["category"]),
+        "{{PROFILE_DIVISION}}": html.escape(profile["division"]),
+        "{{PROFILE_TRACK}}": html.escape(profile["track"]),
+        "{{SELECTED_COUNT}}": str(len(records)),
+        "{{REQUIRED_ELEMENTS}}": str(profile["required_elements"]),
+        "{{ELEMENT_MIN}}": f"{profile['element_range'][0]:.1f}",
+        "{{ELEMENT_MAX}}": f"{profile['element_range'][1]:.1f}",
+        "{{TOTAL_MIN}}": f"{total_min:.1f}",
+        "{{TOTAL_MAX}}": f"{total_max:.1f}",
+        "{{REQUIREMENTS}}": requirements_html,
+        "{{NOTES}}": notes_html or "<li>No extra notes for this profile.</li>",
+        "{{CARDS}}": "".join(cards),
+    }
+    for placeholder, value in substitutions.items():
+        template = template.replace(placeholder, value)
+    return template
 
 
 def _clear_selected_records() -> None:
