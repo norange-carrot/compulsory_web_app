@@ -17,184 +17,12 @@ if TYPE_CHECKING:
 
 from catalog_common import code_sort_key, prefix_for_code
 from extract_catalog import build_catalog_from_pdf_bytes
+from profile_rules import PROFILE_RULES, Division, DivisionRules, Profile, ProfileRules, Track
 
 ELITE_AERIAL_DEADLIFT_MIN_VALUE = 0.4
 CATALOG_STATE_KEY = "catalog_records"
 SOURCE_STATE_KEY = "catalog_source"
 EXPORT_TEMPLATE_PATH = Path(__file__).with_name("compulsory-selection.html")
-
-
-PROFILE_RULES: dict[str, dict[str, Any]] = {
-    "Senior Singles": {
-        "track": "Singles",
-        "required_elements": 9,
-        "requirements": [
-            "3 flexibility elements",
-            "3 strength elements",
-            "1 spinning pole spin",
-            "1 static pole spin",
-            "1 dead lift",
-        ],
-        "divisions": {
-            "Intro": {"element_range": (0.1, 0.3), "total_range": (0.9, 2.7)},
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Professional": {"element_range": (0.3, 0.8), "total_range": (5.5, 8.8)},
-            "Elite": {"element_range": (0.5, 1.0), "total_range": (7.7, 11.0)},
-        },
-        "notes": [
-            "Elite seniors must choose an aerial dead lift with a fourth or higher point value.",
-        ],
-    },
-    "Masters Singles": {
-        "track": "Singles",
-        "required_elements": 9,
-        "requirements": [
-            "3 flexibility elements",
-            "3 strength elements",
-            "1 spinning pole spin",
-            "1 static pole spin",
-            "1 dead lift",
-        ],
-        "divisions": {
-            "Intro": {"element_range": (0.1, 0.3), "total_range": (0.9, 2.7)},
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Professional": {"element_range": (0.3, 0.8), "total_range": (5.5, 8.8)},
-            "Elite": {"element_range": (0.5, 1.0), "total_range": (6.6, 11.0)},
-        },
-        "notes": [
-            "Elite masters must choose an aerial dead lift with a fourth or higher point value.",
-        ],
-    },
-    "Junior Singles": {
-        "track": "Singles",
-        "required_elements": 9,
-        "requirements": [
-            "3 flexibility elements",
-            "3 strength elements",
-            "1 spinning pole spin",
-            "1 static pole spin",
-            "1 dead lift",
-        ],
-        "divisions": {
-            "Intro": {"element_range": (0.1, 0.3), "total_range": (0.9, 2.7)},
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Elite": {"element_range": (0.3, 0.8), "total_range": (5.5, 8.8)},
-        },
-    },
-    "Novice Singles": {
-        "track": "Singles",
-        "required_elements": 9,
-        "requirements": [
-            "3 flexibility elements",
-            "3 strength elements",
-            "1 spinning pole spin",
-            "1 static pole spin",
-            "1 dead lift",
-        ],
-        "divisions": {
-            "Intro": {"element_range": (0.1, 0.3), "total_range": (0.9, 2.7)},
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Elite": {"element_range": (0.3, 0.8), "total_range": (4.4, 7.2)},
-        },
-    },
-    "Pre-Novice Singles": {
-        "track": "Singles",
-        "required_elements": 9,
-        "requirements": [
-            "3 flexibility elements",
-            "3 strength elements",
-            "1 spinning/static pole spin",
-            "1 additional spin of choice",
-            "1 dead lift",
-        ],
-        "divisions": {
-            "Intro": {"element_range": (0.1, 0.3), "total_range": (0.9, 2.7)},
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-        },
-        "notes": [
-            "Pre-Novice does not have Professional or Elite divisions.",
-        ],
-    },
-    "Para Pole": {
-        "track": "Singles",
-        "required_elements": 9,
-        "requirements": [
-            "3 flexibility elements",
-            "3 strength elements",
-            "1 spinning pole spin",
-            "1 static pole spin",
-            "1 dead lift",
-        ],
-        "divisions": {
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Elite": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-        },
-        "notes": [
-            (
-                "Para Pole follows amateur compulsory value ranges with additional "
-                "tolerance rules not yet enforced in this app."
-            )
-        ],
-    },
-    "Senior Doubles": {
-        "track": "Doubles",
-        "required_elements": 9,
-        "requirements": [
-            "3 synchronised partner elements: parallel, interlocking, balance-based",
-            "1 balance partner element",
-            "2 flying partner elements",
-            "1 partner supported element",
-            "1 pole-based floor element",
-            "1 synchronised dead lift",
-        ],
-        "divisions": {
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Professional": {"element_range": (0.3, 0.8), "total_range": (5.5, 8.8)},
-            "Elite": {"element_range": (0.5, 1.0), "total_range": (7.7, 11.0)},
-        },
-        "notes": [
-            "Elite senior doubles must use an aerial dead lift with a fourth or higher point value."
-        ],
-    },
-    "Junior Doubles": {
-        "track": "Doubles",
-        "required_elements": 9,
-        "requirements": [
-            "3 synchronised partner elements: parallel, interlocking, balance-based",
-            "1 balance partner element",
-            "2 flying partner elements",
-            "1 partner supported element",
-            "1 pole-based floor element",
-            "1 synchronised dead lift",
-        ],
-        "divisions": {
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Elite": {"element_range": (0.3, 0.8), "total_range": (5.5, 8.8)},
-        },
-        "notes": [
-            "Junior doubles does not have Intro or Professional divisions.",
-        ],
-    },
-    "Novice/Youth Doubles": {
-        "track": "Doubles",
-        "required_elements": 9,
-        "requirements": [
-            "3 synchronised partner elements: parallel, interlocking, balance-based",
-            "1 balance partner element",
-            "2 flying partner elements",
-            "1 partner supported element",
-            "1 pole-based floor element",
-            "1 synchronised dead lift",
-        ],
-        "divisions": {
-            "Amateur": {"element_range": (0.1, 0.5), "total_range": (1.1, 4.5)},
-            "Elite": {"element_range": (0.3, 0.8), "total_range": (4.4, 7.2)},
-        },
-        "notes": [
-            "Novice and Youth doubles do not have Intro or Professional divisions.",
-        ],
-    },
-}
 
 
 def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
@@ -208,23 +36,16 @@ def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
     return records
 
 
-def profile_details(category: str, division: str) -> dict[str, Any]:
-    profile = PROFILE_RULES[category]
-    division_details = profile["divisions"][division]
-    return {
-        **profile,
-        "category": category,
-        "division": division,
-        "element_range": division_details["element_range"],
-        "total_range": division_details["total_range"],
-    }
-
-
-def filter_records(
-    records: list[dict[str, Any]], profile: dict[str, Any], query: str, sections: list[str]
+def filter_records(  # noqa: PLR0913, PLR0917
+    records: list[dict[str, Any]],
+    category: Profile,
+    profile: ProfileRules,
+    division: Division,
+    query: str,
+    sections: list[str],
 ) -> list[dict[str, Any]]:
-    min_value, max_value = profile["element_range"]
-    track = profile["track"]
+    min_value, max_value = profile.divisions[division].element_range
+    track = profile.track
     filtered: list[dict[str, Any]] = []
 
     for record in records:
@@ -236,8 +57,8 @@ def filter_records(
             continue
 
         if (
-            profile["division"] == "Intro"
-            and track == "Singles"
+            division is Division.INTRO
+            and track is Track.SINGLES
             and prefix_for_code(record["code_number"]) in {"DL", "ADL"}
             and not (
                 record["code_number"].startswith("DL1") or record["code_number"].startswith("ADL9")
@@ -246,8 +67,9 @@ def filter_records(
             continue
 
         if (
-            profile["division"] == "Elite"
-            and profile["category"] in {"Senior Singles", "Masters Singles", "Senior Doubles"}
+            division is Division.ELITE
+            and category
+            in {Profile.SENIOR_SINGLES, Profile.MASTERS_SINGLES, Profile.SENIOR_DOUBLES}
             and prefix_for_code(record["code_number"]) in {"DL", "ADL"}
             and (
                 not record["code_number"].startswith("ADL")
@@ -291,7 +113,11 @@ def format_value_range(value_min: float, value_max: float) -> str:
 
 
 def render_export_html(
-    records: list[dict[str, Any]], profile: dict[str, Any], source_name: str
+    records: list[dict[str, Any]],
+    category: Profile,
+    profile: ProfileRules,
+    division: Division,
+    source_name: str,
 ) -> str:
     total_min = sum(record["value_min"] for record in records)
     total_max = sum(record["value_max"] for record in records)
@@ -333,19 +159,19 @@ def render_export_html(
             )
         )
 
-    requirements_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile["requirements"])
-    notes_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile.get("notes", []))
+    requirements_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile.requirements)
+    notes_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile.notes)
 
     template = EXPORT_TEMPLATE_PATH.read_text(encoding="utf-8")
     substitutions = {
         "{{SOURCE_NAME}}": html.escape(source_name),
-        "{{PROFILE_CATEGORY}}": html.escape(profile["category"]),
-        "{{PROFILE_DIVISION}}": html.escape(profile["division"]),
-        "{{PROFILE_TRACK}}": html.escape(profile["track"]),
+        "{{PROFILE_CATEGORY}}": html.escape(category),
+        "{{PROFILE_DIVISION}}": html.escape(division),
+        "{{PROFILE_TRACK}}": html.escape(profile.track),
         "{{SELECTED_COUNT}}": str(len(records)),
-        "{{REQUIRED_ELEMENTS}}": str(profile["required_elements"]),
-        "{{ELEMENT_MIN}}": f"{profile['element_range'][0]:.1f}",
-        "{{ELEMENT_MAX}}": f"{profile['element_range'][1]:.1f}",
+        "{{REQUIRED_ELEMENTS}}": str(profile.required_elements),
+        "{{ELEMENT_MIN}}": f"{profile.divisions[division].element_range[0]:.1f}",
+        "{{ELEMENT_MAX}}": f"{profile.divisions[division].element_range[1]:.1f}",
         "{{TOTAL_MIN}}": f"{total_min:.1f}",
         "{{TOTAL_MAX}}": f"{total_max:.1f}",
         "{{REQUIREMENTS}}": requirements_html,
@@ -388,25 +214,26 @@ def _handle_uploaded_pdf(uploaded_pdf: UploadedFile | None) -> None:
     st.rerun()
 
 
-def _render_rules(profile: dict[str, Any]) -> None:
+def _render_rules(profile: ProfileRules, division_rules: DivisionRules) -> None:
     st.markdown(
         f"""
 **Rules in use**
 
-- Track: {profile["track"]}
-- Required elements: {profile["required_elements"]}
-- Allowed technical value per element: {profile["element_range"][0]:.1f} to
-    {profile["element_range"][1]:.1f}
-- Required total technical value: {profile["total_range"][0]:.1f} to {profile["total_range"][1]:.1f}
+- Track: {profile.track}
+- Required elements: {profile.required_elements}
+- Allowed technical value per element: {division_rules.element_range[0]:.1f} to
+    {division_rules.element_range[1]:.1f}
+- Required total technical value: {division_rules.total_range[0]:.1f} to
+    {division_rules.total_range[1]:.1f}
 """
     )
-    if profile.get("requirements"):
+    if profile.requirements:
         st.write("Required composition:")
-        for item in profile["requirements"]:
+        for item in profile.requirements:
             st.write(f"- {item}")
-    if profile.get("notes"):
+    if profile.notes:
         st.write("Notes:")
-        for item in profile["notes"]:
+        for item in profile.notes:
             st.write(f"- {item}")
 
 
@@ -438,15 +265,21 @@ def _render_element_browser(records: list[dict[str, Any]], max_results: int) -> 
         with text_col:
             st.markdown(f"**Code**: {record['code_number']}")
             st.markdown(f"**Name**: {record['name']}")
-            st.markdown(f"**Technical value**: {record['technical_value'].replace(chr(10), ' / ')}")
+            technical_value = record["technical_value"].replace(chr(10), " / ")
+            st.markdown(f"**Technical value**: {technical_value}")
             st.markdown("**Criteria**")
             for line in record["criteria_lines"]:
                 st.markdown(f"- {line}")
         st.divider()
 
 
-def _render_printable_selection(
-    records: list[dict[str, Any]], profile: dict[str, Any], source_name: str
+def _render_printable_selection(  # noqa: PLR0913, PLR0917
+    records: list[dict[str, Any]],
+    category: Profile,
+    profile: ProfileRules,
+    division: Division,
+    division_rules: DivisionRules,
+    source_name: str,
 ) -> None:
     chosen_records = selected_records(records)
     st.subheader("Printable Selection")
@@ -460,12 +293,12 @@ def _render_printable_selection(
     summary_left.metric("Selected count", len(chosen_records))
     summary_mid.metric("Selected total min", f"{selected_min:.1f}")
     summary_right.metric("Selected total max", f"{selected_max:.1f}")
-    if len(chosen_records) != profile["required_elements"]:
+    if len(chosen_records) != profile.required_elements:
         st.warning(
-            f"This profile expects {profile['required_elements']} elements, but "
+            f"This profile expects {profile.required_elements} elements, but "
             f"{len(chosen_records)} are currently selected."
         )
-    total_low, total_high = profile["total_range"]
+    total_low, total_high = division_rules.total_range
     if selected_max < total_low or selected_min > total_high:
         st.warning(
             f"The current selection falls outside the required total range of "
@@ -486,7 +319,7 @@ def _render_printable_selection(
         for record in chosen_records
     ]
     st.dataframe(preview_data, use_container_width=True, hide_index=True)
-    export_html = render_export_html(chosen_records, profile, source_name)
+    export_html = render_export_html(chosen_records, category, profile, division, source_name)
     st.download_button(
         "Download printable HTML",
         data=export_html,
@@ -525,12 +358,13 @@ def main() -> None:
     category = st.sidebar.selectbox("Category", list(PROFILE_RULES))
     division = st.sidebar.selectbox(
         "Division",
-        list(PROFILE_RULES[category]["divisions"]),
+        list(PROFILE_RULES[category].divisions),
     )
-    profile = profile_details(category, division)
+    profile = PROFILE_RULES[category]
+    division_rules = profile.divisions[division]
 
     section_options = sorted(
-        {record["section"] for record in records if profile["track"] in record["tracks"]}
+        {record["section"] for record in records if profile.track in record["tracks"]}
     )
     selected_sections = st.sidebar.multiselect("Sections", section_options)
     query = st.sidebar.text_input("Search", placeholder="Code, name, criteria...")
@@ -538,14 +372,14 @@ def main() -> None:
         "Visible results", min_value=10, max_value=200, value=40, step=10
     )
 
-    filtered = filter_records(records, profile, query, selected_sections)
+    filtered = filter_records(records, category, profile, division, query, selected_sections)
     chosen_records = selected_records(records)
     top_left, top_mid, top_right = st.columns(3)
     top_left.metric("Parsed elements", len(records))
     top_mid.metric("Matching this profile", len(filtered))
     top_right.metric("Currently selected", len(chosen_records))
 
-    _render_rules(profile)
+    _render_rules(profile, division_rules)
     st.divider()
     st.subheader("Element Browser")
     st.caption(
@@ -554,7 +388,7 @@ def main() -> None:
     )
     _render_element_browser(filtered, max_results)
     st.divider()
-    _render_printable_selection(records, profile, source_name)
+    _render_printable_selection(records, category, profile, division, division_rules, source_name)
 
 
 if __name__ == "__main__":
