@@ -74,10 +74,6 @@ def tracks_for_code(code_number: str) -> set[str]:
     return {"Singles", "Doubles"}
 
 
-def parse_numeric_values(technical_value: str) -> list[float]:
-    return [float(value) for value in VALUE_RE.findall(technical_value)]
-
-
 def find_code_gaps(code_numbers: Iterable[str]) -> dict[str, list[int]]:
     """Find missing numbers within each code prefix's observed range.
 
