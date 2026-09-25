@@ -51,6 +51,10 @@ def selection_key(code_number: str) -> str:
     return f"selected::{code_number}"
 
 
+def selection_widget_key(code_number: str) -> str:
+    return f"selection-widget::{code_number}"
+
+
 def selected_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         record
@@ -138,8 +142,20 @@ def render_export_html(
 
 def clear_selected_records() -> None:
     for key in list(st.session_state):
-        if isinstance(key, str) and key.startswith("selected::"):
+        if isinstance(key, str) and key.startswith(("selected::", "selection-widget::")):
             del st.session_state[key]
+
+
+def deselect_record(code_number: str) -> None:
+    st.session_state.pop(selection_key(code_number), None)
+    st.session_state.pop(selection_widget_key(code_number), None)
+
+
+def sync_record_selection(code_number: str) -> None:
+    if st.session_state.get(selection_widget_key(code_number), False):
+        st.session_state[selection_key(code_number)] = True
+    else:
+        st.session_state.pop(selection_key(code_number), None)
 
 
 def handle_uploaded_pdf(uploaded_pdf: UploadedFile | None) -> None:
@@ -202,10 +218,16 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
         )
         select_col, image_col, text_col = st.columns([0.8, 1.2, 2.3])
         with select_col:
+            widget_key = selection_widget_key(record["code_number"])
+            if widget_key not in st.session_state:
+                st.session_state[widget_key] = st.session_state.get(
+                    selection_key(record["code_number"]), False
+                )
             st.checkbox(
                 "Select",
-                key=selection_key(record["code_number"]),
-                value=st.session_state.get(selection_key(record["code_number"]), False),
+                key=widget_key,
+                on_change=sync_record_selection,
+                args=(record["code_number"],),
             )
             st.caption(f"Section: {record['section']}")
             st.caption(f"Page: {record['page_number']}")
@@ -262,16 +284,23 @@ def render_printable_selection(
             f"The selected total range overlaps the required total range of "
             f"{total_low:.1f} to {total_high:.1f}."
         )
-    preview_data = [
-        {
-            "Code": record["code_number"],
-            "Name": record["name"],
-            "Section": record["section"],
-            "Technical Value": record["technical_value"].replace("\n", " / "),
-        }
-        for record in chosen_records
-    ]
-    st.dataframe(preview_data, use_container_width=True, hide_index=True)
+    if st.button("Deselect all", key="deselect-all-selected-records"):
+        clear_selected_records()
+        st.rerun()
+    for record in chosen_records:
+        code_col, name_col, section_col, value_col, action_col = st.columns(
+            [0.8, 2.4, 1.2, 1.2, 0.8]
+        )
+        code_col.markdown(f"**{record['code_number']}**")
+        name_col.write(record["name"])
+        section_col.write(record["section"])
+        value_col.write(record["technical_value"].replace("\n", " / "))
+        if action_col.button(
+            "Deselect",
+            key=f"deselect::{record['code_number']}",
+        ):
+            deselect_record(record["code_number"])
+            st.rerun()
     export_html = render_export_html(chosen_records, category, profile, division, source_name)
     st.download_button(
         "Download printable HTML",
@@ -337,6 +366,7 @@ def main() -> None:
     top_mid.metric("Matching this profile", len(filtered))
     top_right.metric("Currently selected", len(chosen_records))
 
+    render_printable_selection(records, category, profile, division, source_name)
     render_rules(profile, division_rules)
     st.divider()
     st.subheader("Element Browser")
@@ -345,8 +375,6 @@ def main() -> None:
         "elements you want in the printable export."
     )
     render_element_browser(filtered, max_results)
-    st.divider()
-    render_printable_selection(records, category, profile, division, source_name)
 
 
 if __name__ == "__main__":
