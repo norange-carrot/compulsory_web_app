@@ -51,6 +51,10 @@ def selection_key(code_number: str) -> str:
     return f"selected::{code_number}"
 
 
+def selection_widget_key(code_number: str) -> str:
+    return f"selection-widget::{code_number}"
+
+
 def selected_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         record
@@ -138,12 +142,20 @@ def render_export_html(
 
 def clear_selected_records() -> None:
     for key in list(st.session_state):
-        if isinstance(key, str) and key.startswith("selected::"):
+        if isinstance(key, str) and key.startswith(("selected::", "selection-widget::")):
             del st.session_state[key]
 
 
 def deselect_record(code_number: str) -> None:
     st.session_state.pop(selection_key(code_number), None)
+    st.session_state.pop(selection_widget_key(code_number), None)
+
+
+def sync_record_selection(code_number: str) -> None:
+    if st.session_state.get(selection_widget_key(code_number), False):
+        st.session_state[selection_key(code_number)] = True
+    else:
+        st.session_state.pop(selection_key(code_number), None)
 
 
 def handle_uploaded_pdf(uploaded_pdf: UploadedFile | None) -> None:
@@ -206,10 +218,16 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
         )
         select_col, image_col, text_col = st.columns([0.8, 1.2, 2.3])
         with select_col:
+            widget_key = selection_widget_key(record["code_number"])
+            if widget_key not in st.session_state:
+                st.session_state[widget_key] = st.session_state.get(
+                    selection_key(record["code_number"]), False
+                )
             st.checkbox(
                 "Select",
-                key=selection_key(record["code_number"]),
-                value=st.session_state.get(selection_key(record["code_number"]), False),
+                key=widget_key,
+                on_change=sync_record_selection,
+                args=(record["code_number"],),
             )
             st.caption(f"Section: {record['section']}")
             st.caption(f"Page: {record['page_number']}")
