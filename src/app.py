@@ -337,6 +337,7 @@ def main() -> None:
     top_mid.metric("Matching this profile", len(filtered))
     top_right.metric("Currently selected", len(chosen_records))
 
+    render_printable_selection(records, category, profile, division, source_name)
     render_rules(profile, division_rules)
     st.divider()
     st.subheader("Element Browser")
@@ -345,8 +346,6 @@ def main() -> None:
         "elements you want in the printable export."
     )
     render_element_browser(filtered, max_results)
-    st.divider()
-    render_printable_selection(records, category, profile, division, source_name)
 
 
 if __name__ == "__main__":
