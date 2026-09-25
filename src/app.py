@@ -142,6 +142,10 @@ def clear_selected_records() -> None:
             del st.session_state[key]
 
 
+def deselect_record(code_number: str) -> None:
+    st.session_state.pop(selection_key(code_number), None)
+
+
 def handle_uploaded_pdf(uploaded_pdf: UploadedFile | None) -> None:
     if uploaded_pdf is None:
         st.sidebar.warning("Choose a PDF file first.")
@@ -272,6 +276,18 @@ def render_printable_selection(
         for record in chosen_records
     ]
     st.dataframe(preview_data, use_container_width=True, hide_index=True)
+    if st.button("Deselect all", key="deselect-all-selected-records"):
+        clear_selected_records()
+        st.rerun()
+    for record in chosen_records:
+        item_col, action_col = st.columns([4, 1])
+        item_col.markdown(f"**{record['code_number']} | {record['name']}**")
+        if action_col.button(
+            "Deselect",
+            key=f"deselect::{record['code_number']}",
+        ):
+            deselect_record(record["code_number"])
+            st.rerun()
     export_html = render_export_html(chosen_records, category, profile, division, source_name)
     st.download_button(
         "Download printable HTML",
