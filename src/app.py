@@ -284,22 +284,17 @@ def render_printable_selection(
             f"The selected total range overlaps the required total range of "
             f"{total_low:.1f} to {total_high:.1f}."
         )
-    preview_data = [
-        {
-            "Code": record["code_number"],
-            "Name": record["name"],
-            "Section": record["section"],
-            "Technical Value": record["technical_value"].replace("\n", " / "),
-        }
-        for record in chosen_records
-    ]
-    st.dataframe(preview_data, use_container_width=True, hide_index=True)
     if st.button("Deselect all", key="deselect-all-selected-records"):
         clear_selected_records()
         st.rerun()
     for record in chosen_records:
-        item_col, action_col = st.columns([4, 1])
-        item_col.markdown(f"**{record['code_number']} | {record['name']}**")
+        code_col, name_col, section_col, value_col, action_col = st.columns(
+            [0.8, 2.4, 1.2, 1.2, 0.8]
+        )
+        code_col.markdown(f"**{record['code_number']}**")
+        name_col.write(record["name"])
+        section_col.write(record["section"])
+        value_col.write(record["technical_value"].replace("\n", " / "))
         if action_col.button(
             "Deselect",
             key=f"deselect::{record['code_number']}",
