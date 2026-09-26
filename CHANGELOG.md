@@ -1,3 +1,9 @@
+## v0.3.0 (2026-09-26)
+
+### Feat
+
+- **#11**: hide division rules by default with option to show
+
 ## v0.2.3 (2026-09-13)
 
 ### Fix
