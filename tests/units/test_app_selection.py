@@ -2,7 +2,7 @@
 
 from src import app
 from src.catalog_filter import FilterCriteria, filter_records
-from src.profile_rules import PROFILE_RULES, Division, Profile, Track
+from src.models import PROFILE_RULES, Division, Profile, Track
 
 
 def test_filter_changes_keep_selected_records(monkeypatch):

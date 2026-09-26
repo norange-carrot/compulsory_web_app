@@ -19,18 +19,26 @@ try:
     from src.catalog_common import code_sort_key
     from src.catalog_filter import FilterCriteria, filter_records
     from src.extract_catalog import build_catalog_from_pdf_bytes
-    from src.profile_rules import (
+    from src.models import (
         PROFILE_RULES,
         Division,
         DivisionRules,
         Profile,
         ProfileRules,
+        SelectionContext,
     )
 except ImportError:  # pragma: no cover
     from catalog_common import code_sort_key
     from catalog_filter import FilterCriteria, filter_records
     from extract_catalog import build_catalog_from_pdf_bytes
-    from profile_rules import PROFILE_RULES, Division, DivisionRules, Profile, ProfileRules
+    from models import (
+        PROFILE_RULES,
+        Division,
+        DivisionRules,
+        Profile,
+        ProfileRules,
+        SelectionContext,
+    )
 
 CATALOG_STATE_KEY = "catalog_records"
 SOURCE_STATE_KEY = "catalog_source"
@@ -250,12 +258,12 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
 
 def render_printable_selection(
     records: list[dict[str, Any]],
-    category: Profile,
-    profile: ProfileRules,
-    division: Division,
-    source_name: str,
+    context: SelectionContext,
+    *,
+    show_division_rules: bool,
 ) -> None:
-    division_rules = profile.divisions[division]
+    profile = context.profile
+    division_rules = profile.divisions[context.division]
     chosen_records = selected_records(records)
     st.subheader("Printable Selection")
     if not chosen_records:
@@ -268,22 +276,23 @@ def render_printable_selection(
     summary_left.metric("Selected count", len(chosen_records))
     summary_mid.metric("Selected total min", f"{selected_min:.1f}")
     summary_right.metric("Selected total max", f"{selected_max:.1f}")
-    if len(chosen_records) != profile.required_elements:
-        st.warning(
-            f"This profile expects {profile.required_elements} elements, but "
-            f"{len(chosen_records)} are currently selected."
-        )
-    total_low, total_high = division_rules.total_range
-    if selected_max < total_low or selected_min > total_high:
-        st.warning(
-            f"The current selection falls outside the required total range of "
-            f"{total_low:.1f} to {total_high:.1f}."
-        )
-    else:
-        st.success(
-            f"The selected total range overlaps the required total range of "
-            f"{total_low:.1f} to {total_high:.1f}."
-        )
+    if show_division_rules:
+        if len(chosen_records) != profile.required_elements:
+            st.warning(
+                f"This profile expects {profile.required_elements} elements, but "
+                f"{len(chosen_records)} are currently selected."
+            )
+        total_low, total_high = division_rules.total_range
+        if selected_max < total_low or selected_min > total_high:
+            st.warning(
+                f"The current selection falls outside the required total range of "
+                f"{total_low:.1f} to {total_high:.1f}."
+            )
+        else:
+            st.success(
+                f"The selected total range overlaps the required total range of "
+                f"{total_low:.1f} to {total_high:.1f}."
+            )
     if st.button("Deselect all", key="deselect-all-selected-records"):
         clear_selected_records()
         st.rerun()
@@ -301,7 +310,9 @@ def render_printable_selection(
         ):
             deselect_record(record["code_number"])
             st.rerun()
-    export_html = render_export_html(chosen_records, category, profile, division, source_name)
+    export_html = render_export_html(
+        chosen_records, context.category, profile, context.division, context.source_name
+    )
     st.download_button(
         "Download printable HTML",
         data=export_html,
@@ -356,6 +367,16 @@ def main() -> None:
         "Visible results", min_value=10, max_value=200, value=40, step=10
     )
 
+    st.sidebar.header("Division Rules Display")
+    show_division_rules = (
+        st.sidebar.selectbox(
+            "Show division rules information",
+            ["Hide", "Show"],
+            index=0,
+        )
+        == "Show"
+    )
+
     filtered = filter_records(
         records,
         FilterCriteria(category, profile, division, query, selected_sections),
@@ -366,8 +387,10 @@ def main() -> None:
     top_mid.metric("Matching this profile", len(filtered))
     top_right.metric("Currently selected", len(chosen_records))
 
-    render_printable_selection(records, category, profile, division, source_name)
-    render_rules(profile, division_rules)
+    context = SelectionContext(category, profile, division, source_name)
+    render_printable_selection(records, context, show_division_rules=show_division_rules)
+    if show_division_rules:
+        render_rules(profile, division_rules)
     st.divider()
     st.subheader("Element Browser")
     st.caption(
