@@ -3,10 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from src.profile_rules import PROFILE_RULES, Division, DivisionRules, Profile, Track
+from src.models import PROFILE_RULES, Division, DivisionRules, Profile, Track
 
 
-def test_profile_rules_are_pydantic_models():
+def test_models_are_pydantic_models():
     profile = PROFILE_RULES[Profile.SENIOR_SINGLES]
 
     assert profile.track is Track.SINGLES

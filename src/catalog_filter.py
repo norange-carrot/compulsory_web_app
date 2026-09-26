@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.catalog_common import prefix_for_code
-from src.profile_rules import Division, Profile, ProfileRules, Track
+from src.models import Division, Profile, ProfileRules, Track
 
 ELITE_AERIAL_DEADLIFT_MIN_VALUE = 0.4
 
