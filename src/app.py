@@ -192,8 +192,10 @@ def handle_uploaded_pdf(uploaded_pdf: UploadedFile | None) -> None:
 
 
 def render_rules(profile: ProfileRules, division_rules: DivisionRules) -> None:
-    st.markdown(
-        f"""
+    rules_col, composition_col = st.columns(2)
+    with rules_col:
+        st.markdown(
+            f"""
 **Rules in use**
 
 - Track: {profile.track}
@@ -203,15 +205,15 @@ def render_rules(profile: ProfileRules, division_rules: DivisionRules) -> None:
 - Required total technical value: {division_rules.total_range[0]:.1f} to
     {division_rules.total_range[1]:.1f}
 """
-    )
-    if profile.requirements:
-        st.write("Required composition:")
-        for item in profile.requirements:
-            st.write(f"- {item}")
-    if profile.notes:
-        st.write("Notes:")
-        for item in profile.notes:
-            st.write(f"- {item}")
+        )
+    with composition_col:
+        composition = "\n".join(f"- {item}" for item in profile.requirements)
+        notes = "\n".join(f"- {item}" for item in profile.notes)
+        composition_markdown = "**Required composition**\n\n"
+        composition_markdown += composition or "- No specific composition listed."
+        if notes:
+            composition_markdown += f"\n\n**Notes**\n\n{notes}"
+        st.markdown(composition_markdown)
 
 
 def render_element_browser(records: list[dict[str, Any]], max_results: int) -> None:
@@ -272,10 +274,9 @@ def render_printable_selection(
     chosen_records.sort(key=lambda item: code_sort_key(item["code_number"]))
     selected_min = sum(record["value_min"] for record in chosen_records)
     selected_max = sum(record["value_max"] for record in chosen_records)
-    summary_left, summary_mid, summary_right = st.columns(3)
+    summary_left, summary_mid = st.columns(2)
     summary_left.metric("Selected count", len(chosen_records))
-    summary_mid.metric("Selected total min", f"{selected_min:.1f}")
-    summary_right.metric("Selected total max", f"{selected_max:.1f}")
+    summary_mid.metric("Selected total", f"{selected_min:.1f}")
     if show_division_rules:
         if len(chosen_records) != profile.required_elements:
             st.warning(
