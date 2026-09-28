@@ -216,17 +216,26 @@ def render_rules(profile: ProfileRules, division_rules: DivisionRules) -> None:
         st.markdown(composition_markdown)
 
 
+CRITERIA_LIST_CSS = """
+<style>
+.criteria-list { margin: 0.2em 0 0; padding-left: 1.2em; line-height: 1.15; }
+.criteria-list li { margin-bottom: 1px; }
+</style>
+"""
+
+
 def render_element_browser(records: list[dict[str, Any]], max_results: int) -> None:
     visible_records = records[:max_results]
     if not visible_records:
         st.warning("No elements match the current filters.")
         return
+    st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
     for record in visible_records:
         st.markdown(
             f"### {record['code_number']} | {record['name']} | TV "
             f"{format_value_range(record['value_min'], record['value_max'])}"
         )
-        select_col, image_col, text_col = st.columns([0.8, 1.2, 2.3])
+        select_col, image_col, info_col, criteria_col = st.columns([0.8, 1.2, 1.0, 1.5])
         with select_col:
             widget_key = selection_widget_key(record["code_number"])
             if widget_key not in st.session_state:
@@ -247,14 +256,17 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
                 st.image(image_data, use_container_width=True)
             else:
                 st.info("No image extracted")
-        with text_col:
+        with info_col:
             st.markdown(f"**Code**: {record['code_number']}")
             st.markdown(f"**Name**: {record['name']}")
             technical_value = record["technical_value"].replace(chr(10), " / ")
             st.markdown(f"**Technical value**: {technical_value}")
+        with criteria_col:
             st.markdown("**Criteria**")
-            for line in record["criteria_lines"]:
-                st.markdown(f"- {line}")
+            criteria_items = "".join(
+                f"<li>{html.escape(line)}</li>" for line in record["criteria_lines"]
+            )
+            st.markdown(f'<ul class="criteria-list">{criteria_items}</ul>', unsafe_allow_html=True)
         st.divider()
 
 

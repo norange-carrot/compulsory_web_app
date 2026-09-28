@@ -125,19 +125,6 @@ def looks_like_criteria_text(text: str) -> bool:
     )
 
 
-def looks_like_criteria_field(text: str) -> bool:
-    text = compact_whitespace(text).lower()
-    if not text:
-        return False
-    return bool(
-        re.match(
-            r"^(hold the position|points of contact|arm position|grip|leg position|"
-            r"body position|rotation|criteria)(:|$)",
-            text,
-        )
-    )
-
-
 def normalize_criteria_lines(text: str) -> list[str]:
     lines = [compact_whitespace(line) for line in text.splitlines() if compact_whitespace(line)]
     if not lines:
@@ -145,13 +132,14 @@ def normalize_criteria_lines(text: str) -> list[str]:
 
     normalized: list[str] = []
     for line in lines:
+        starts_new_bullet = bool(re.match(r"^[\-•]\s*", line))
         formatted_line = re.sub(r"^[\-•]\s*", "", line)
         if not formatted_line:
             continue
-        if not normalized:
-            normalized.append(formatted_line)
-            continue
-        if looks_like_criteria_field(formatted_line) or looks_like_criteria_field(normalized[-1]):
+        # A leading "-"/"•" marks a genuine new bullet; anything else is a
+        # wrapped continuation of the previous bullet, regardless of whether
+        # it happens to contain another field keyword.
+        if starts_new_bullet or not normalized:
             normalized.append(formatted_line)
         else:
             normalized[-1] = f"{normalized[-1]} {formatted_line}"
