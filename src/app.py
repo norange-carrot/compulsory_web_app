@@ -253,7 +253,7 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
         with image_col:
             image_data = record.get("image_bytes")
             if image_data:
-                st.image(image_data, use_container_width=True)
+                st.image(image_data, width=180)
             else:
                 st.info("No image extracted")
         with info_col:
