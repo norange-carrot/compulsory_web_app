@@ -19,25 +19,25 @@ try:
     from src.catalog_common import code_sort_key
     from src.catalog_filter import FilterCriteria, filter_records
     from src.extract_catalog import build_catalog_from_pdf_bytes
-    from src.models import (
+    from src.models.frontend import SelectionContext
+    from src.models.profiles import (
         PROFILE_RULES,
         Division,
         DivisionRules,
         Profile,
         ProfileRules,
-        SelectionContext,
     )
 except ImportError:  # pragma: no cover
     from catalog_common import code_sort_key
     from catalog_filter import FilterCriteria, filter_records
     from extract_catalog import build_catalog_from_pdf_bytes
-    from models import (
+    from models.frontend import SelectionContext
+    from models.profiles import (
         PROFILE_RULES,
         Division,
         DivisionRules,
         Profile,
         ProfileRules,
-        SelectionContext,
     )
 
 CATALOG_STATE_KEY = "catalog_records"
@@ -216,17 +216,26 @@ def render_rules(profile: ProfileRules, division_rules: DivisionRules) -> None:
         st.markdown(composition_markdown)
 
 
+CRITERIA_LIST_CSS = """
+<style>
+.criteria-list { margin: 0.2em 0 0; padding-left: 1.2em; line-height: 1.15; }
+.criteria-list li { margin-bottom: 1px; }
+</style>
+"""
+
+
 def render_element_browser(records: list[dict[str, Any]], max_results: int) -> None:
     visible_records = records[:max_results]
     if not visible_records:
         st.warning("No elements match the current filters.")
         return
+    st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
     for record in visible_records:
         st.markdown(
             f"### {record['code_number']} | {record['name']} | TV "
             f"{format_value_range(record['value_min'], record['value_max'])}"
         )
-        select_col, image_col, text_col = st.columns([0.8, 1.2, 2.3])
+        select_col, image_col, info_col, criteria_col = st.columns([0.8, 1.2, 1.0, 1.5])
         with select_col:
             widget_key = selection_widget_key(record["code_number"])
             if widget_key not in st.session_state:
@@ -244,17 +253,20 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
         with image_col:
             image_data = record.get("image_bytes")
             if image_data:
-                st.image(image_data, use_container_width=True)
+                st.image(image_data, width=180)
             else:
                 st.info("No image extracted")
-        with text_col:
+        with info_col:
             st.markdown(f"**Code**: {record['code_number']}")
             st.markdown(f"**Name**: {record['name']}")
             technical_value = record["technical_value"].replace(chr(10), " / ")
             st.markdown(f"**Technical value**: {technical_value}")
+        with criteria_col:
             st.markdown("**Criteria**")
-            for line in record["criteria_lines"]:
-                st.markdown(f"- {line}")
+            criteria_items = "".join(
+                f"<li>{html.escape(line)}</li>" for line in record["criteria_lines"]
+            )
+            st.markdown(f'<ul class="criteria-list">{criteria_items}</ul>', unsafe_allow_html=True)
         st.divider()
 
 
