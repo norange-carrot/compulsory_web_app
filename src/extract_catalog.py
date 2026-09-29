@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import shutil
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import fitz
 
@@ -40,6 +40,7 @@ TECHNICAL_VALUE_COLUMN_X_MAX = 345
 DOUBLE_CODE_COUNT = 2
 MIN_DOUBLE_VARIANT_COUNT = 6
 MIN_IMAGE_CLIP_DIMENSION = 2
+HOLD_POSITION_ANCHOR_RE = re.compile(r"^[-\u2022]?\s*hold the position\b", re.IGNORECASE)
 
 
 @dataclass
@@ -51,6 +52,14 @@ class _PageExtractionContext:
     image_placements: list[dict[str, Any]]
     blocks: list[dict[str, Any]]
     starts: list[dict[str, Any]]
+    criteria_anchor_tops: list[float | None]
+
+
+class _RowBounds(NamedTuple):
+    region_top: float
+    region_bottom: float
+    criteria_top: float
+    criteria_bottom: float
 
 
 def prepare_output_dirs(output_dir: Path) -> Path:
@@ -331,11 +340,45 @@ def _row_region(
     previous_start_y = starts[index - 1]["y0"] if index > 0 else MIN_PAGE_TEXT_Y
     next_start_y = starts[index + 1]["y0"] if index + 1 < len(starts) else page_height - 24
     midpoint_top = (previous_start_y + start_block["y0"]) / 2 if index > 0 else MIN_PAGE_TEXT_Y
-    region_top = max(MIN_PAGE_TEXT_Y, min(midpoint_top, start_block["y0"] - 90))
+    # Never let the window cross past the midpoint with the previous row (which would
+    # leak the previous row's trailing/wrapped text into this row) even though we allow
+    # looking up to 90 above the start block to catch wrapped name/criteria text.
+    region_top = max(MIN_PAGE_TEXT_Y, midpoint_top, start_block["y0"] - 90)
     region_bottom = (
         (start_block["y0"] + next_start_y) / 2 if index + 1 < len(starts) else page_height - 24
     )
     return midpoint_top, region_top, region_bottom
+
+
+def _criteria_anchor_tops(
+    blocks: list[dict[str, Any]], starts: list[dict[str, Any]]
+) -> list[float | None]:
+    """The y0 where each row's own "Hold the position:" bullet begins, if any.
+
+    The criteria column flows independently of the name/code column, so a tall
+    criteria paragraph routinely starts well above (or ends well below) the
+    name-column midpoint used by `_row_region`, causing the naive midpoint split
+    to attribute a row's leading or trailing bullets to its neighbor instead.
+    Since (bar the dead lifts) every element's criteria starts with this
+    bullet, it's a reliable per-row anchor for the criteria column specifically.
+    Rows without one of their own (the dead lifts) get None, so callers fall
+    back to the midpoint-based region.
+    """
+    anchor_tops = sorted(
+        block["y0"]
+        for block in blocks
+        if block["x0"] >= TECHNICAL_VALUE_COLUMN_X_MAX
+        and HOLD_POSITION_ANCHOR_RE.match(compact_whitespace(block["text"]))
+    )
+    tops: list[float | None] = []
+    anchor_index = 0
+    for start in starts:
+        top: float | None = None
+        while anchor_index < len(anchor_tops) and anchor_tops[anchor_index] < start["y0"]:
+            top = anchor_tops[anchor_index]
+            anchor_index += 1
+        tops.append(top)
+    return tops
 
 
 def _parse_start_block(start_block: dict[str, Any]) -> tuple[str, str] | None:
@@ -387,21 +430,20 @@ def _row_name(name: str, name_blocks: list[dict[str, Any]]) -> str:
 def _row_content(
     blocks: list[dict[str, Any]],
     start_block: dict[str, Any],
-    region_top: float,
-    region_bottom: float,
+    bounds: _RowBounds,
     name_blocks: list[dict[str, Any]],
 ) -> tuple[str, str, list[str], list[float]]:
     tech_blocks = [
         block
         for block in blocks
-        if region_top <= block["y0"] < region_bottom
+        if bounds.region_top <= block["y0"] < bounds.region_bottom
         and TECHNICAL_VALUE_COLUMN_X_MIN <= block["x0"] <= TECHNICAL_VALUE_COLUMN_X_MAX
         and VALUE_RE.search(block["text"])
     ]
     criteria_blocks = [
         block
         for block in blocks
-        if region_top <= block["y0"] < region_bottom
+        if bounds.criteria_top <= block["y0"] < bounds.criteria_bottom
         and (block["x0"] >= TECHNICAL_VALUE_COLUMN_X_MAX or looks_like_criteria_text(block["text"]))
     ]
     criteria_blocks = [
@@ -456,8 +498,16 @@ def _extract_row_record(
     if not name:
         return None
 
+    anchor_tops = context.criteria_anchor_tops
+    criteria_top = anchor_tops[index] or region_top
+    next_anchor_top = anchor_tops[index + 1] if index + 1 < len(anchor_tops) else None
+    criteria_bottom = next_anchor_top or region_bottom
+
     technical_value, criteria_text, criteria_lines, numeric_values = _row_content(
-        context.blocks, start_block, region_top, region_bottom, name_blocks
+        context.blocks,
+        start_block,
+        _RowBounds(region_top, region_bottom, criteria_top, criteria_bottom),
+        name_blocks,
     )
     if not numeric_values:
         # The tech-value cell is occasionally merged into the start/name block
@@ -501,8 +551,16 @@ def extract_page_records(
     page = document[page_index]
     blocks = _page_text_blocks(page)
     starts = _catalog_start_blocks(blocks)
+    criteria_anchor_tops = _criteria_anchor_tops(blocks, starts)
     context = _PageExtractionContext(
-        document, page, page_index, images_dir, page_image_placements(page), blocks, starts
+        document,
+        page,
+        page_index,
+        images_dir,
+        page_image_placements(page),
+        blocks,
+        starts,
+        criteria_anchor_tops,
     )
 
     records: list[dict[str, Any]] = []
