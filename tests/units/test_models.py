@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from src.models import PROFILE_RULES, Division, DivisionRules, Profile, Track
+from src.models.profiles import PROFILE_RULES, Division, DivisionRules, Profile, Track
 
 
 def test_models_are_pydantic_models():

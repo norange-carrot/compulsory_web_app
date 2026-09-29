@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any
 
 import fitz
 
@@ -26,6 +25,7 @@ from catalog_common import (
     section_for_code,
     tracks_for_code,
 )
+from models.extraction import PageExtractionContext, RowBounds
 
 MAX_IMAGE_SIZE = 8
 MIN_CLIP_HEIGHT = 10
@@ -41,25 +41,6 @@ DOUBLE_CODE_COUNT = 2
 MIN_DOUBLE_VARIANT_COUNT = 6
 MIN_IMAGE_CLIP_DIMENSION = 2
 HOLD_POSITION_ANCHOR_RE = re.compile(r"^[-\u2022]?\s*hold the position\b", re.IGNORECASE)
-
-
-@dataclass
-class _PageExtractionContext:
-    document: fitz.Document
-    page: fitz.Page
-    page_index: int
-    images_dir: Path
-    image_placements: list[dict[str, Any]]
-    blocks: list[dict[str, Any]]
-    starts: list[dict[str, Any]]
-    criteria_anchor_tops: list[float | None]
-
-
-class _RowBounds(NamedTuple):
-    region_top: float
-    region_bottom: float
-    criteria_top: float
-    criteria_bottom: float
 
 
 def prepare_output_dirs(output_dir: Path) -> Path:
@@ -430,7 +411,7 @@ def _row_name(name: str, name_blocks: list[dict[str, Any]]) -> str:
 def _row_content(
     blocks: list[dict[str, Any]],
     start_block: dict[str, Any],
-    bounds: _RowBounds,
+    bounds: RowBounds,
     name_blocks: list[dict[str, Any]],
 ) -> tuple[str, str, list[str], list[float]]:
     tech_blocks = [
@@ -463,7 +444,7 @@ def _row_content(
 
 
 def _save_row_image(
-    context: _PageExtractionContext,
+    context: PageExtractionContext,
     midpoint_top: float,
     region_top: float,
     region_bottom: float,
@@ -482,7 +463,7 @@ def _save_row_image(
 
 
 def _extract_row_record(
-    context: _PageExtractionContext,
+    context: PageExtractionContext,
     index: int,
 ) -> dict[str, Any] | None:
     start_block = context.starts[index]
@@ -506,7 +487,7 @@ def _extract_row_record(
     technical_value, criteria_text, criteria_lines, numeric_values = _row_content(
         context.blocks,
         start_block,
-        _RowBounds(region_top, region_bottom, criteria_top, criteria_bottom),
+        RowBounds(region_top, region_bottom, criteria_top, criteria_bottom),
         name_blocks,
     )
     if not numeric_values:
@@ -552,7 +533,7 @@ def extract_page_records(
     blocks = _page_text_blocks(page)
     starts = _catalog_start_blocks(blocks)
     criteria_anchor_tops = _criteria_anchor_tops(blocks, starts)
-    context = _PageExtractionContext(
+    context = PageExtractionContext(
         document,
         page,
         page_index,

@@ -19,25 +19,25 @@ try:
     from src.catalog_common import code_sort_key
     from src.catalog_filter import FilterCriteria, filter_records
     from src.extract_catalog import build_catalog_from_pdf_bytes
-    from src.models import (
+    from src.models.frontend import SelectionContext
+    from src.models.profiles import (
         PROFILE_RULES,
         Division,
         DivisionRules,
         Profile,
         ProfileRules,
-        SelectionContext,
     )
 except ImportError:  # pragma: no cover
     from catalog_common import code_sort_key
     from catalog_filter import FilterCriteria, filter_records
     from extract_catalog import build_catalog_from_pdf_bytes
-    from models import (
+    from models.frontend import SelectionContext
+    from models.profiles import (
         PROFILE_RULES,
         Division,
         DivisionRules,
         Profile,
         ProfileRules,
-        SelectionContext,
     )
 
 CATALOG_STATE_KEY = "catalog_records"

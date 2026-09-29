@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
@@ -52,14 +51,6 @@ class ProfileRules(BaseModel):
     requirements: tuple[str, ...]
     divisions: dict[Division, DivisionRules]
     notes: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class SelectionContext:
-    category: Profile
-    profile: ProfileRules
-    division: Division
-    source_name: str
 
 
 SINGLES_REQUIREMENTS = (
