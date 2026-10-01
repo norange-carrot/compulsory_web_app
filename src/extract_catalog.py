@@ -42,6 +42,9 @@ DOUBLE_CODE_COUNT = 2
 MIN_DOUBLE_VARIANT_COUNT = 6
 MIN_IMAGE_CLIP_DIMENSION = 2
 HOLD_POSITION_ANCHOR_RE = re.compile(r"^[-\u2022]?\s*hold the position\b", re.IGNORECASE)
+# Repeating table header block that sometimes falls into the criteria column
+# region (e.g. Dead Lift rows, which lack a "Hold the position:" anchor).
+TABLE_HEADER_RE = re.compile(r"^no\.\s*name\s*element\s*tech\.\s*value\s*criteria$", re.IGNORECASE)
 
 
 def prepare_output_dirs(output_dir: Path) -> Path:
@@ -438,6 +441,7 @@ def _row_content(
         if block is not start_block
         and block not in name_blocks
         and compact_whitespace(block["text"])
+        and not TABLE_HEADER_RE.match(compact_whitespace(block["text"]))
     ]
     criteria_blocks.sort(key=lambda block: (block["y0"], block["x0"]))
 
