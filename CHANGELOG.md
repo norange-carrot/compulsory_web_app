@@ -1,3 +1,9 @@
+## v0.5.0 (2026-10-01)
+
+### Feat
+
+- **#1**: summarize filter options for dead lifts
+
 ## v0.4.1 (2026-10-01)
 
 ### Fix
