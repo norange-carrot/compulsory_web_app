@@ -1,3 +1,9 @@
+## v0.4.1 (2026-10-01)
+
+### Fix
+
+- **#1**: clean up dead lift criteria
+
 ## v0.4.0 (2026-10-01)
 
 ### Feat
