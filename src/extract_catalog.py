@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from catalog_common import (
+    DEADLIFT_VARIANT_DESCRIPTIONS,
     DEADLIFT_VARIANT_RE,
     VALUE_RE,
     code_sort_key,
@@ -237,12 +238,16 @@ def expand_deadlift_variants(record: dict[str, Any]) -> list[dict[str, Any]]:
 
     for base_code, group in grouped:
         for letter, value in group:
+            description = DEADLIFT_VARIANT_DESCRIPTIONS[letter.lower()]
             variant = dict(record)
             variant["code_number"] = f"{base_code}{letter.lower()}"
             variant["technical_value"] = value
             variant["value_min"] = float(value)
             variant["value_max"] = float(value)
             variant["section"] = section_for_code(base_code)
+            variant["variant_description"] = description
+            variant["criteria_lines"] = [description, *record["criteria_lines"]]
+            variant["criteria"] = f"- {description}\n{record['criteria']}"
             expanded.append(variant)
 
     return expanded or [record]

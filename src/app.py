@@ -101,13 +101,21 @@ def render_export_html(
             f'<div class="criteria-line">{html.escape(line)}</div>'
             for line in record["criteria_lines"]
         )
+        variant_description = record.get("variant_description")
+        variant_html = (
+            f'<div class="variant">{html.escape(variant_description)}</div>'
+            if variant_description
+            else ""
+        )
         cards.append(
             "".join(
                 [
                     '<article class="card">',
                     '<div class="card-header">',
                     f'<div><div class="code">{html.escape(record["code_number"])}</div>',
-                    f"<h2>{html.escape(record['name'])}</h2></div>",
+                    f"<h2>{html.escape(record['name'])}</h2>",
+                    variant_html,
+                    "</div>",
                     (
                         '<div class="value">TV '
                         f"{html.escape(record['technical_value'].replace(chr(10), ' / '))}</div>"
@@ -231,8 +239,10 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
         return
     st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
     for record in visible_records:
+        variant_description = record.get("variant_description")
+        variant_part = f" | {variant_description}" if variant_description else ""
         st.markdown(
-            f"### {record['code_number']} | {record['name']} | TV "
+            f"### {record['code_number']} | {record['name']}{variant_part} | TV "
             f"{format_value_range(record['value_min'], record['value_max'])}"
         )
         select_col, image_col, info_col, criteria_col = st.columns([0.8, 1.2, 1.0, 1.5])

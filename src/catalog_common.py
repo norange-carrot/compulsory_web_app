@@ -33,6 +33,13 @@ VALUE_RE = re.compile(r"([0-9]+(?:\.[0-9]+)?)")
 DEADLIFT_VARIANT_RE = re.compile(r"([abc])\s*-\s*([0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
 CODE_NUMBER_RE = re.compile(r"^([A-Za-z]+)(\d+)[a-z]?$")
 
+# Per the rules (dead lift page), the a/b/c code suffix denotes a leg position variant.
+DEADLIFT_VARIANT_DESCRIPTIONS = {
+    "a": "With bent legs",
+    "b": "With both legs fully extended and open",
+    "c": "With both legs fully extended and closed",
+}
+
 
 def compact_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
