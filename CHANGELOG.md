@@ -1,3 +1,9 @@
+## v0.4.0 (2026-10-01)
+
+### Feat
+
+- **extraction,-display**: add leg variation to dead lift description
+
 ## v0.3.0 (2026-09-26)
 
 ### Feat
