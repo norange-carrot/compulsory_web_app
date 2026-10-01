@@ -228,6 +228,12 @@ CRITERIA_LIST_CSS = """
 <style>
 .criteria-list { margin: 0.2em 0 0; padding-left: 1.2em; line-height: 1.15; }
 .criteria-list li { margin-bottom: 1px; }
+.element-thumb {
+    width: 180px;
+    height: 180px;
+    object-fit: contain;
+    display: block;
+}
 </style>
 """
 
@@ -263,7 +269,12 @@ def render_element_browser(records: list[dict[str, Any]], max_results: int) -> N
         with image_col:
             image_data = record.get("image_bytes")
             if image_data:
-                st.image(image_data, width=180)
+                image_b64 = base64.b64encode(image_data).decode("ascii")
+                st.markdown(
+                    f'<img src="data:image/png;base64,{image_b64}" '
+                    f'alt="{html.escape(record["name"])}" class="element-thumb">',
+                    unsafe_allow_html=True,
+                )
             else:
                 st.info("No image extracted")
         with info_col:
