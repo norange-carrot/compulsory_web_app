@@ -1,3 +1,9 @@
+## v0.6.0 (2026-10-03)
+
+### Feat
+
+- **#16**: allow filtering for all tracks and all divisions (#17)
+
 ## v0.5.1 (2026-10-01)
 
 ### Fix
