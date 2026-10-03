@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SelectionContext:
-    category: Profile
-    profile: ProfileRules
-    division: Division
+    category: Profile | None
+    profile: ProfileRules | None
+    division: Division | None
     source_name: str
