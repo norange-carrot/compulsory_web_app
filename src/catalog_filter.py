@@ -15,9 +15,9 @@ ELITE_AERIAL_DEADLIFT_MIN_VALUE = 0.4
 
 @dataclass(frozen=True)
 class FilterCriteria:
-    category: Profile
-    profile: ProfileRules
-    division: Division
+    category: Profile | None
+    profile: ProfileRules | None
+    division: Division | None
     query: str
     sections: list[str]
 
@@ -26,16 +26,22 @@ def filter_records(
     records: list[dict[str, Any]],
     criteria: FilterCriteria,
 ) -> list[dict[str, Any]]:
-    min_value, max_value = criteria.profile.divisions[criteria.division].element_range
-    track = criteria.profile.track
+    track = criteria.profile.track if criteria.profile is not None else None
+    min_value, max_value = (
+        criteria.profile.divisions[criteria.division].element_range
+        if criteria.profile is not None and criteria.division is not None
+        else (None, None)
+    )
     filtered: list[dict[str, Any]] = []
 
     for record in records:
-        if track not in record["tracks"]:
+        if track is not None and track not in record["tracks"]:
             continue
         if criteria.sections and record["section"] not in criteria.sections:
             continue
-        if record["value_max"] < min_value or record["value_min"] > max_value:
+        if min_value is not None and (
+            record["value_max"] < min_value or record["value_min"] > max_value
+        ):
             continue
 
         if (

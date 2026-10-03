@@ -43,6 +43,8 @@ except ImportError:  # pragma: no cover
 CATALOG_STATE_KEY = "catalog_records"
 SOURCE_STATE_KEY = "catalog_source"
 EXPORT_TEMPLATE_PATH = Path(__file__).with_name("compulsory-selection.html")
+ALL_CATEGORIES_OPTION = "All categories"
+ALL_DIVISIONS_OPTION = "All divisions"
 
 
 def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
@@ -79,9 +81,9 @@ def format_value_range(value_min: float, value_max: float) -> str:
 
 def render_export_html(
     records: list[dict[str, Any]],
-    category: Profile,
-    profile: ProfileRules,
-    division: Division,
+    category: Profile | None,
+    profile: ProfileRules | None,
+    division: Division | None,
     source_name: str,
 ) -> str:
     total_min = sum(record["value_min"] for record in records)
@@ -132,19 +134,26 @@ def render_export_html(
             )
         )
 
-    requirements_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile.requirements)
-    notes_html = "".join(f"<li>{html.escape(item)}</li>" for item in profile.notes)
+    requirements_html = (
+        "".join(f"<li>{html.escape(item)}</li>" for item in profile.requirements)
+        if profile is not None
+        else "<li>No category selected.</li>"
+    )
+    notes_html = (
+        "".join(f"<li>{html.escape(item)}</li>" for item in profile.notes) if profile else ""
+    )
+    element_range = profile.divisions[division].element_range if profile and division else None
 
     template = EXPORT_TEMPLATE_PATH.read_text(encoding="utf-8")
     substitutions = {
         "{{SOURCE_NAME}}": html.escape(source_name),
-        "{{PROFILE_CATEGORY}}": html.escape(category),
-        "{{PROFILE_DIVISION}}": html.escape(division),
-        "{{PROFILE_TRACK}}": html.escape(profile.track),
+        "{{PROFILE_CATEGORY}}": html.escape(category or ALL_CATEGORIES_OPTION),
+        "{{PROFILE_DIVISION}}": html.escape(division or ALL_DIVISIONS_OPTION),
+        "{{PROFILE_TRACK}}": html.escape(profile.track if profile else "All tracks"),
         "{{SELECTED_COUNT}}": str(len(records)),
-        "{{REQUIRED_ELEMENTS}}": str(profile.required_elements),
-        "{{ELEMENT_MIN}}": f"{profile.divisions[division].element_range[0]:.1f}",
-        "{{ELEMENT_MAX}}": f"{profile.divisions[division].element_range[1]:.1f}",
+        "{{REQUIRED_ELEMENTS}}": str(profile.required_elements) if profile else "N/A",
+        "{{ELEMENT_MIN}}": f"{element_range[0]:.1f}" if element_range else "N/A",
+        "{{ELEMENT_MAX}}": f"{element_range[1]:.1f}" if element_range else "N/A",
         "{{TOTAL_MIN}}": f"{total_min:.1f}",
         "{{TOTAL_MAX}}": f"{total_max:.1f}",
         "{{REQUIREMENTS}}": requirements_html,
@@ -298,7 +307,11 @@ def render_printable_selection(
     show_division_rules: bool,
 ) -> None:
     profile = context.profile
-    division_rules = profile.divisions[context.division]
+    division_rules = (
+        profile.divisions[context.division]
+        if profile is not None and context.division is not None
+        else None
+    )
     chosen_records = selected_records(records)
     st.subheader("Printable Selection")
     if not chosen_records:
@@ -310,7 +323,7 @@ def render_printable_selection(
     summary_left, summary_mid = st.columns(2)
     summary_left.metric("Selected count", len(chosen_records))
     summary_mid.metric("Selected total", f"{selected_min:.1f}")
-    if show_division_rules:
+    if show_division_rules and profile is not None and division_rules is not None:
         if len(chosen_records) != profile.required_elements:
             st.warning(
                 f"This profile expects {profile.required_elements} elements, but "
@@ -384,16 +397,27 @@ def main() -> None:
     st.sidebar.info(f"Loaded catalog extracted from: {source_name}")
 
     st.sidebar.header("Compulsory Profile")
-    category = st.sidebar.selectbox("Category", list(PROFILE_RULES))
-    division = st.sidebar.selectbox(
-        "Division",
-        list(PROFILE_RULES[category].divisions),
+    category_choice = st.sidebar.selectbox("Category", [ALL_CATEGORIES_OPTION, *PROFILE_RULES])
+    category = None if category_choice == ALL_CATEGORIES_OPTION else Profile(category_choice)
+    profile = PROFILE_RULES[category] if category is not None else None
+
+    division_options = (
+        [ALL_DIVISIONS_OPTION, *profile.divisions]
+        if profile is not None
+        else [ALL_DIVISIONS_OPTION]
     )
-    profile = PROFILE_RULES[category]
-    division_rules = profile.divisions[division]
+    division_choice = st.sidebar.selectbox("Division", division_options)
+    division = None if division_choice == ALL_DIVISIONS_OPTION else Division(division_choice)
+    division_rules = (
+        profile.divisions[division] if profile is not None and division is not None else None
+    )
 
     section_options = sorted(
-        {record["section"] for record in records if profile.track in record["tracks"]}
+        {
+            record["section"]
+            for record in records
+            if profile is None or profile.track in record["tracks"]
+        }
     )
     selected_sections = st.sidebar.multiselect("Sections", section_options)
     query = st.sidebar.text_input("Search", placeholder="Code, name, criteria...")
@@ -402,13 +426,16 @@ def main() -> None:
     )
 
     st.sidebar.header("Division Rules Display")
+    can_show_division_rules = division_rules is not None
     show_division_rules = (
         st.sidebar.selectbox(
             "Show division rules information",
             ["Hide", "Show"],
             index=0,
+            disabled=not can_show_division_rules,
         )
         == "Show"
+        and can_show_division_rules
     )
 
     filtered = filter_records(
@@ -416,14 +443,13 @@ def main() -> None:
         FilterCriteria(category, profile, division, query, selected_sections),
     )
     chosen_records = selected_records(records)
-    top_left, top_mid, top_right = st.columns(3)
+    top_left, top_right = st.columns(2)
     top_left.metric("Parsed elements", len(records))
-    top_mid.metric("Matching this profile", len(filtered))
     top_right.metric("Currently selected", len(chosen_records))
 
     context = SelectionContext(category, profile, division, source_name)
     render_printable_selection(records, context, show_division_rules=show_division_rules)
-    if show_division_rules:
+    if show_division_rules and profile is not None and division_rules is not None:
         render_rules(profile, division_rules)
     st.divider()
     st.subheader("Element Browser")
