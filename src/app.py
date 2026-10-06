@@ -15,6 +15,8 @@ import streamlit as st
 if TYPE_CHECKING:
     from streamlit.runtime.uploaded_file_manager import UploadedFile
 
+    from src.models.catalog import CatalogRecord
+
 try:
     from src.catalog_common import code_sort_key
     from src.catalog_filter import FilterCriteria, filter_records
@@ -45,16 +47,26 @@ SOURCE_STATE_KEY = "catalog_source"
 EXPORT_TEMPLATE_PATH = Path(__file__).with_name("compulsory-selection.html")
 ALL_CATEGORIES_OPTION = "All categories"
 ALL_DIVISIONS_OPTION = "All divisions"
+ELEMENTS_PER_PAGE = 60
+BROWSER_PAGE_STATE_KEY = "element_browser_page"
+BROWSER_FILTER_SIGNATURE_KEY = "element_browser_filter_signature"
 
 
-def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
+def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[CatalogRecord]:
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_dir = Path(tmp_dir)
         records = build_catalog_from_pdf_bytes(pdf_bytes, output_dir)
-        for record in records:
-            image_path = record.pop("image_path", None)
-            record["image_bytes"] = (output_dir / image_path).read_bytes() if image_path else None
-    return records
+        return [
+            record.model_copy(
+                update={
+                    "image_path": None,
+                    "image_bytes": (
+                        (output_dir / record.image_path).read_bytes() if record.image_path else None
+                    ),
+                }
+            )
+            for record in records
+        ]
 
 
 def selection_key(code_number: str) -> str:
@@ -65,11 +77,11 @@ def selection_widget_key(code_number: str) -> str:
     return f"selection-widget::{code_number}"
 
 
-def selected_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def selected_records(records: list[CatalogRecord]) -> list[CatalogRecord]:
     return [
         record
         for record in records
-        if st.session_state.get(selection_key(record["code_number"]), False)
+        if st.session_state.get(selection_key(record.code_number), False)
     ]
 
 
@@ -80,30 +92,30 @@ def format_value_range(value_min: float, value_max: float) -> str:
 
 
 def render_export_html(
-    records: list[dict[str, Any]],
+    records: list[CatalogRecord],
     category: Profile | None,
     profile: ProfileRules | None,
     division: Division | None,
     source_name: str,
 ) -> str:
-    total_min = sum(record["value_min"] for record in records)
-    total_max = sum(record["value_max"] for record in records)
+    total_min = sum(record.value_min for record in records)
+    total_max = sum(record.value_max for record in records)
     cards = []
     for record in records:
         image_html = ""
-        image_data = record.get("image_bytes")
+        image_data = record.image_bytes
         if image_data:
             image_b64 = base64.b64encode(image_data).decode("ascii")
             image_html = (
                 f'<img src="data:image/png;base64,{image_b64}" '
-                f'alt="{html.escape(record["name"])}" class="element-image">'
+                f'alt="{html.escape(record.name)}" class="element-image">'
             )
 
         criteria_items = "".join(
             f'<div class="criteria-line">{html.escape(line)}</div>'
-            for line in record["criteria_lines"]
+            for line in record.criteria_lines
         )
-        variant_description = record.get("variant_description")
+        variant_description = record.variant_description
         variant_html = (
             f'<div class="variant">{html.escape(variant_description)}</div>'
             if variant_description
@@ -114,19 +126,19 @@ def render_export_html(
                 [
                     '<article class="card">',
                     '<div class="card-header">',
-                    f'<div><div class="code">{html.escape(record["code_number"])}</div>',
-                    f"<h2>{html.escape(record['name'])}</h2>",
+                    f'<div><div class="code">{html.escape(record.code_number)}</div>',
+                    f"<h2>{html.escape(record.name)}</h2>",
                     variant_html,
                     "</div>",
                     (
                         '<div class="value">TV '
-                        f"{html.escape(record['technical_value'].replace(chr(10), ' / '))}</div>"
+                        f"{html.escape(record.technical_value.replace(chr(10), ' / '))}</div>"
                     ),
                     "</div>",
                     image_html,
                     (
-                        f'<div class="meta">{html.escape(record["section"])} | '
-                        f"Page {record['page_number']}</div>"
+                        f'<div class="meta">{html.escape(record.section)} | '
+                        f"Page {record.page_number}</div>"
                     ),
                     f'<div class="criteria">{criteria_items}</div>',
                     "</article>",
@@ -247,61 +259,94 @@ CRITERIA_LIST_CSS = """
 """
 
 
-def render_element_browser(records: list[dict[str, Any]], max_results: int) -> None:
-    visible_records = records[:max_results]
-    if not visible_records:
+def paginate_records(
+    records: list[CatalogRecord], filter_signature: tuple[Any, ...]
+) -> list[CatalogRecord]:
+    if st.session_state.get(BROWSER_FILTER_SIGNATURE_KEY) != filter_signature:
+        st.session_state[BROWSER_FILTER_SIGNATURE_KEY] = filter_signature
+        st.session_state[BROWSER_PAGE_STATE_KEY] = 1
+    total_pages = max(1, -(-len(records) // ELEMENTS_PER_PAGE))
+    current_page = st.session_state.get(BROWSER_PAGE_STATE_KEY, 1)
+    current_page = min(max(current_page, 1), total_pages)
+    st.session_state[BROWSER_PAGE_STATE_KEY] = current_page
+
+    prev_col, label_col, next_col = st.columns([1, 2, 1])
+    with prev_col:
+        if st.button("Previous", disabled=current_page <= 1, key="element-browser-prev"):
+            st.session_state[BROWSER_PAGE_STATE_KEY] = current_page - 1
+            st.rerun()
+    with label_col:
+        st.markdown(
+            f"<div style='text-align:center'>Page {current_page} of {total_pages} "
+            f"({len(records)} elements)</div>",
+            unsafe_allow_html=True,
+        )
+    with next_col:
+        if st.button("Next", disabled=current_page >= total_pages, key="element-browser-next"):
+            st.session_state[BROWSER_PAGE_STATE_KEY] = current_page + 1
+            st.rerun()
+
+    start = (current_page - 1) * ELEMENTS_PER_PAGE
+    return records[start : start + ELEMENTS_PER_PAGE]
+
+
+def render_record_card(record: CatalogRecord) -> None:
+    variant_description = record.variant_description
+    variant_part = f" | {variant_description}" if variant_description else ""
+    st.markdown(
+        f"### {record.code_number} | {record.name}{variant_part} | TV "
+        f"{format_value_range(record.value_min, record.value_max)}"
+    )
+    select_col, image_col, info_col, criteria_col = st.columns([0.8, 1.2, 1.0, 1.5])
+    with select_col:
+        widget_key = selection_widget_key(record.code_number)
+        if widget_key not in st.session_state:
+            st.session_state[widget_key] = st.session_state.get(
+                selection_key(record.code_number), False
+            )
+        st.checkbox(
+            "Select",
+            key=widget_key,
+            on_change=sync_record_selection,
+            args=(record.code_number,),
+        )
+        st.caption(f"Section: {record.section}")
+        st.caption(f"Page: {record.page_number}")
+    with image_col:
+        image_data = record.image_bytes
+        if image_data:
+            image_b64 = base64.b64encode(image_data).decode("ascii")
+            st.markdown(
+                f'<img src="data:image/png;base64,{image_b64}" '
+                f'alt="{html.escape(record.name)}" class="element-thumb">',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info("No image extracted")
+    with info_col:
+        st.markdown(f"**Code**: {record.code_number}")
+        st.markdown(f"**Name**: {record.name}")
+        technical_value = record.technical_value.replace(chr(10), " / ")
+        st.markdown(f"**Technical value**: {technical_value}")
+    with criteria_col:
+        st.markdown("**Criteria**")
+        criteria_items = "".join(f"<li>{html.escape(line)}</li>" for line in record.criteria_lines)
+        st.markdown(f'<ul class="criteria-list">{criteria_items}</ul>', unsafe_allow_html=True)
+    st.divider()
+
+
+def render_element_browser(records: list[CatalogRecord], filter_signature: tuple[Any, ...]) -> None:
+    if not records:
         st.warning("No elements match the current filters.")
         return
+    visible_records = paginate_records(records, filter_signature)
     st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
     for record in visible_records:
-        variant_description = record.get("variant_description")
-        variant_part = f" | {variant_description}" if variant_description else ""
-        st.markdown(
-            f"### {record['code_number']} | {record['name']}{variant_part} | TV "
-            f"{format_value_range(record['value_min'], record['value_max'])}"
-        )
-        select_col, image_col, info_col, criteria_col = st.columns([0.8, 1.2, 1.0, 1.5])
-        with select_col:
-            widget_key = selection_widget_key(record["code_number"])
-            if widget_key not in st.session_state:
-                st.session_state[widget_key] = st.session_state.get(
-                    selection_key(record["code_number"]), False
-                )
-            st.checkbox(
-                "Select",
-                key=widget_key,
-                on_change=sync_record_selection,
-                args=(record["code_number"],),
-            )
-            st.caption(f"Section: {record['section']}")
-            st.caption(f"Page: {record['page_number']}")
-        with image_col:
-            image_data = record.get("image_bytes")
-            if image_data:
-                image_b64 = base64.b64encode(image_data).decode("ascii")
-                st.markdown(
-                    f'<img src="data:image/png;base64,{image_b64}" '
-                    f'alt="{html.escape(record["name"])}" class="element-thumb">',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.info("No image extracted")
-        with info_col:
-            st.markdown(f"**Code**: {record['code_number']}")
-            st.markdown(f"**Name**: {record['name']}")
-            technical_value = record["technical_value"].replace(chr(10), " / ")
-            st.markdown(f"**Technical value**: {technical_value}")
-        with criteria_col:
-            st.markdown("**Criteria**")
-            criteria_items = "".join(
-                f"<li>{html.escape(line)}</li>" for line in record["criteria_lines"]
-            )
-            st.markdown(f'<ul class="criteria-list">{criteria_items}</ul>', unsafe_allow_html=True)
-        st.divider()
+        render_record_card(record)
 
 
 def render_printable_selection(
-    records: list[dict[str, Any]],
+    records: list[CatalogRecord],
     context: SelectionContext,
     *,
     show_division_rules: bool,
@@ -317,9 +362,9 @@ def render_printable_selection(
     if not chosen_records:
         st.info("Select one or more elements to build the printable output.")
         return
-    chosen_records.sort(key=lambda item: code_sort_key(item["code_number"]))
-    selected_min = sum(record["value_min"] for record in chosen_records)
-    selected_max = sum(record["value_max"] for record in chosen_records)
+    chosen_records.sort(key=lambda item: code_sort_key(item.code_number))
+    selected_min = sum(record.value_min for record in chosen_records)
+    selected_max = sum(record.value_max for record in chosen_records)
     summary_left, summary_mid = st.columns(2)
     summary_left.metric("Selected count", len(chosen_records))
     summary_mid.metric("Selected total", f"{selected_min:.1f}")
@@ -347,15 +392,15 @@ def render_printable_selection(
         code_col, name_col, section_col, value_col, action_col = st.columns(
             [0.8, 2.4, 1.2, 1.2, 0.8]
         )
-        code_col.markdown(f"**{record['code_number']}**")
-        name_col.write(record["name"])
-        section_col.write(record["section"])
-        value_col.write(record["technical_value"].replace("\n", " / "))
+        code_col.markdown(f"**{record.code_number}**")
+        name_col.write(record.name)
+        section_col.write(record.section)
+        value_col.write(record.technical_value.replace("\n", " / "))
         if action_col.button(
             "Deselect",
-            key=f"deselect::{record['code_number']}",
+            key=f"deselect::{record.code_number}",
         ):
-            deselect_record(record["code_number"])
+            deselect_record(record.code_number)
             st.rerun()
     export_html = render_export_html(
         chosen_records, context.category, profile, context.division, context.source_name
@@ -413,17 +458,10 @@ def main() -> None:
     )
 
     section_options = sorted(
-        {
-            record["section"]
-            for record in records
-            if profile is None or profile.track in record["tracks"]
-        }
+        {record.section for record in records if profile is None or profile.track in record.tracks}
     )
     selected_sections = st.sidebar.multiselect("Sections", section_options)
     query = st.sidebar.text_input("Search", placeholder="Code, name, criteria...")
-    max_results = st.sidebar.slider(
-        "Visible results", min_value=10, max_value=200, value=40, step=10
-    )
 
     st.sidebar.header("Division Rules Display")
     can_show_division_rules = division_rules is not None
@@ -457,7 +495,8 @@ def main() -> None:
         "Use the search and section filters to narrow the list, then tick the "
         "elements you want in the printable export."
     )
-    render_element_browser(filtered, max_results)
+    filter_signature = (category, division, tuple(sorted(selected_sections)), query)
+    render_element_browser(filtered, filter_signature)
 
 
 if __name__ == "__main__":

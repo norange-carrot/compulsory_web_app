@@ -2,20 +2,24 @@
 
 from src import app
 from src.catalog_filter import FilterCriteria, filter_records
+from src.models.catalog import CatalogRecord
 from src.models.profiles import PROFILE_RULES, Division, Profile, Track
 
 
 def test_filter_changes_keep_selected_records(monkeypatch):
     records = [
-        {
-            "code_number": "S1",
-            "name": "Spin",
-            "section": "Skating",
-            "tracks": [Track.SINGLES],
-            "value_min": 0.5,
-            "value_max": 0.5,
-            "criteria_lines": [],
-        }
+        CatalogRecord(
+            code_number="S1",
+            name="Spin",
+            technical_value="0.5",
+            criteria="",
+            criteria_lines=(),
+            section="Skating",
+            tracks=(Track.SINGLES,),
+            page_number=1,
+            value_min=0.5,
+            value_max=0.5,
+        )
     ]
     session_state = {
         app.selection_key("S1"): True,
