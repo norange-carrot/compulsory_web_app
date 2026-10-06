@@ -26,6 +26,7 @@ from catalog_common import (
     section_for_code,
     tracks_for_code,
 )
+from models.catalog import CatalogRecord
 from models.extraction import PageExtractionContext, RowBounds
 
 MAX_IMAGE_SIZE = 8
@@ -218,16 +219,16 @@ def extract_row_image(
     return None
 
 
-def expand_deadlift_variants(record: dict[str, Any]) -> list[dict[str, Any]]:
-    if prefix_for_code(record["code_number"]) not in {"DL", "ADL"}:
+def expand_deadlift_variants(record: CatalogRecord) -> list[CatalogRecord]:
+    if prefix_for_code(record.code_number) not in {"DL", "ADL"}:
         return [record]
 
-    variants = DEADLIFT_VARIANT_RE.findall(record["technical_value"])
+    variants = DEADLIFT_VARIANT_RE.findall(record.technical_value)
     if not variants:
         return [record]
 
-    base_codes = [part for part in record["code_number"].split("/") if part]
-    expanded: list[dict[str, Any]] = []
+    base_codes = [part for part in record.code_number.split("/") if part]
+    expanded: list[CatalogRecord] = []
 
     if len(base_codes) == 1:
         grouped = [(base_codes[0], variants)]
@@ -242,15 +243,18 @@ def expand_deadlift_variants(record: dict[str, Any]) -> list[dict[str, Any]]:
     for base_code, group in grouped:
         for letter, value in group:
             description = DEADLIFT_VARIANT_DESCRIPTIONS[letter.lower()]
-            variant = dict(record)
-            variant["code_number"] = f"{base_code}{letter.lower()}"
-            variant["technical_value"] = value
-            variant["value_min"] = float(value)
-            variant["value_max"] = float(value)
-            variant["section"] = section_for_code(base_code)
-            variant["variant_description"] = description
-            variant["criteria_lines"] = [description, *record["criteria_lines"]]
-            variant["criteria"] = f"- {description}\n{record['criteria']}"
+            variant = record.model_copy(
+                update={
+                    "code_number": f"{base_code}{letter.lower()}",
+                    "technical_value": value,
+                    "value_min": float(value),
+                    "value_max": float(value),
+                    "section": section_for_code(base_code),
+                    "variant_description": description,
+                    "criteria_lines": (description, *record.criteria_lines),
+                    "criteria": f"- {description}\n{record.criteria}",
+                }
+            )
             expanded.append(variant)
 
     return expanded or [record]
@@ -474,7 +478,7 @@ def _save_row_image(
 def _extract_row_record(
     context: PageExtractionContext,
     index: int,
-) -> dict[str, Any] | None:
+) -> CatalogRecord | None:
     start_block = context.starts[index]
     parsed_start = _parse_start_block(start_block)
     if not parsed_start:
@@ -520,24 +524,24 @@ def _extract_row_record(
         region_bottom,
         code_number,
     )
-    return {
-        "code_number": code_number,
-        "name": name,
-        "technical_value": technical_value,
-        "criteria": criteria_text,
-        "criteria_lines": criteria_lines,
-        "section": section_for_code(code_number),
-        "tracks": sorted(tracks_for_code(code_number)),
-        "page_number": context.page_index + 1,
-        "value_min": min(numeric_values),
-        "value_max": max(numeric_values),
-        "image_path": image_path,
-    }
+    return CatalogRecord(
+        code_number=code_number,
+        name=name,
+        technical_value=technical_value,
+        criteria=criteria_text,
+        criteria_lines=tuple(criteria_lines),
+        section=section_for_code(code_number),
+        tracks=tuple(sorted(tracks_for_code(code_number))),
+        page_number=context.page_index + 1,
+        value_min=min(numeric_values),
+        value_max=max(numeric_values),
+        image_path=image_path,
+    )
 
 
 def extract_page_records(
     document: fitz.Document, page_index: int, images_dir: Path
-) -> list[dict[str, Any]]:
+) -> list[CatalogRecord]:
     page = document[page_index]
     blocks = _page_text_blocks(page)
     starts = _catalog_start_blocks(blocks)
@@ -553,7 +557,7 @@ def extract_page_records(
         criteria_anchor_tops,
     )
 
-    records: list[dict[str, Any]] = []
+    records: list[CatalogRecord] = []
     for index in range(len(starts)):
         raw_record = _extract_row_record(context, index)
         if raw_record:
@@ -562,8 +566,8 @@ def extract_page_records(
     return records
 
 
-def _build_catalog_from_document(document: fitz.Document, images_dir: Path) -> list[dict[str, Any]]:
-    records: list[dict[str, Any]] = []
+def _build_catalog_from_document(document: fitz.Document, images_dir: Path) -> list[CatalogRecord]:
+    records: list[CatalogRecord] = []
     seen_codes: set[str] = set()
 
     for page_index in range(document.page_count):
@@ -571,16 +575,16 @@ def _build_catalog_from_document(document: fitz.Document, images_dir: Path) -> l
         if not page_is_catalog(page):
             continue
         for record in extract_page_records(document, page_index, images_dir):
-            if record["code_number"] in seen_codes:
+            if record.code_number in seen_codes:
                 continue
-            seen_codes.add(record["code_number"])
+            seen_codes.add(record.code_number)
             records.append(record)
 
-    records.sort(key=lambda item: (item["section"], code_sort_key(item["code_number"])))
+    records.sort(key=lambda item: (item.section, code_sort_key(item.code_number)))
     return records
 
 
-def build_catalog_from_pdf_bytes(pdf_bytes: bytes, output_dir: Path) -> list[dict[str, Any]]:
+def build_catalog_from_pdf_bytes(pdf_bytes: bytes, output_dir: Path) -> list[CatalogRecord]:
     images_dir = prepare_output_dirs(output_dir)
     with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
         return _build_catalog_from_document(document, images_dir)
