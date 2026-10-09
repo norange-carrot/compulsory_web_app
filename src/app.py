@@ -418,13 +418,14 @@ def render_printable_selection(
 def main() -> None:
     st.set_page_config(page_title="Code of Points Helper", layout="wide")
     st.title("Code of Points Helper")
-    st.caption(
-        "Upload/extract a Code of Points PDF, shortlist compulsory elements, and "
-        "export a printable selection."
-    )
 
     st.sidebar.header("Catalog Source")
-    uploaded_pdf = st.sidebar.file_uploader("Upload Code of Points PDF", type=["pdf"])
+    uploaded_pdf = st.sidebar.file_uploader(
+        "Upload Code of Points PDF",
+        type=["pdf"],
+        label_visibility="collapsed",
+        accept_multiple_files=False,
+    )
     if st.sidebar.button("Extract Uploaded PDF", use_container_width=True):
         handle_uploaded_pdf(uploaded_pdf)
 
@@ -433,9 +434,24 @@ def main() -> None:
     if not isinstance(source_name, str):
         source_name = "Unknown source"
     if not records:
-        st.info(
-            "Upload a Code of Points PDF in the sidebar and click 'Extract Uploaded PDF' "
-            "to get started."
+        st.caption(
+            "Upload a Code of Points PDF, shortlist compulsory elements, and "
+            "export a printable selection."
+        )
+        st.warning(
+            "**Disclaimer:** This project is an unofficial, independent tool and is "
+            "**not affiliated with, endorsed by, or sponsored by** the International "
+            "Pole Sports Federation (IPSF) or any other rulebook publisher.\n\n"
+            "The Code of Points PDF is copyrighted material owned by its publisher. "
+            "This app does not include or distribute that PDF. You must supply your "
+            "own legally obtained copy and upload it in the sidebar, then click "
+            "'Extract Uploaded PDF' to get started.\n\n"
+            "No responsibility is taken for the accuracy or completeness of the "
+            "elements shown by this app. This tool must **not** be used when filling "
+            "out the official Compulsory Score Form.\n\n"
+            "Comments, wishes, or improvement suggestions are very welcome — feel "
+            "free to reach out on Instagram "
+            "[@norange7](https://www.instagram.com/norange7/)."
         )
         return
 
@@ -491,10 +507,6 @@ def main() -> None:
         render_rules(profile, division_rules)
     st.divider()
     st.subheader("Element Browser")
-    st.caption(
-        "Use the search and section filters to narrow the list, then tick the "
-        "elements you want in the printable export."
-    )
     filter_signature = (category, division, tuple(sorted(selected_sections)), query)
     render_element_browser(filtered, filter_signature)
 

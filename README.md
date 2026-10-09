@@ -40,3 +40,10 @@ repository does not include or distribute that PDF. You must supply your own
 legally obtained copy and upload it to the app. Only the extraction and viewing
 code is intended to be distributed; the rulebook content itself remains the
 property of its original publisher.
+
+No responsibility is taken for the accuracy or completeness of the elements
+shown by this app. This tool must **not** be used when filling out the
+official Compulsory Score Form.
+
+Comments, wishes, or improvement suggestions are very welcome — feel free to
+reach out on Instagram [@norange7](https://www.instagram.com/norange7/).
