@@ -47,7 +47,6 @@ except ImportError:  # pragma: no cover
 
 CATALOG_STATE_KEY = "catalog_records"
 SOURCE_STATE_KEY = "catalog_source"
-EXPORT_TEMPLATE_PATH = Path(__file__).with_name("compulsory-selection.html")
 ALL_CATEGORIES_OPTION = "All categories"
 ALL_DIVISIONS_OPTION = "All divisions"
 ELEMENTS_PER_PAGE = 60
@@ -92,92 +91,6 @@ def format_value_range(value_min: float, value_max: float) -> str:
     if value_min == value_max:
         return f"{value_min:.1f}"
     return f"{value_min:.1f} - {value_max:.1f}"
-
-
-def render_export_html(
-    records: list[CatalogRecord],
-    category: Profile | None,
-    profile: ProfileRules | None,
-    division: Division | None,
-    source_name: str,
-) -> str:
-    total_min = sum(record.value_min for record in records)
-    total_max = sum(record.value_max for record in records)
-    cards = []
-    for record in records:
-        image_html = ""
-        image_data = record.image_bytes
-        if image_data:
-            image_b64 = base64.b64encode(image_data).decode("ascii")
-            image_html = (
-                f'<img src="data:image/png;base64,{image_b64}" '
-                f'alt="{html.escape(record.name)}" class="element-image">'
-            )
-
-        criteria_items = "".join(
-            f'<div class="criteria-line">{html.escape(line)}</div>'
-            for line in record.criteria_lines
-        )
-        variant_description = record.variant_description
-        variant_html = (
-            f'<div class="variant">{html.escape(variant_description)}</div>'
-            if variant_description
-            else ""
-        )
-        cards.append(
-            "".join(
-                [
-                    '<article class="card">',
-                    '<div class="card-header">',
-                    f'<div><div class="code">{html.escape(record.code_number)}</div>',
-                    f"<h2>{html.escape(record.name)}</h2>",
-                    variant_html,
-                    "</div>",
-                    (
-                        '<div class="value">TV '
-                        f"{html.escape(record.technical_value.replace(chr(10), ' / '))}</div>"
-                    ),
-                    "</div>",
-                    image_html,
-                    (
-                        f'<div class="meta">{html.escape(record.section)} | '
-                        f"Page {record.page_number}</div>"
-                    ),
-                    f'<div class="criteria">{criteria_items}</div>',
-                    "</article>",
-                ]
-            )
-        )
-
-    requirements_html = (
-        "".join(f"<li>{html.escape(item)}</li>" for item in profile.requirements)
-        if profile is not None
-        else "<li>No category selected.</li>"
-    )
-    notes_html = (
-        "".join(f"<li>{html.escape(item)}</li>" for item in profile.notes) if profile else ""
-    )
-    element_range = profile.divisions[division].element_range if profile and division else None
-
-    template = EXPORT_TEMPLATE_PATH.read_text(encoding="utf-8")
-    substitutions = {
-        "{{SOURCE_NAME}}": html.escape(source_name),
-        "{{PROFILE_CATEGORY}}": html.escape(category or ALL_CATEGORIES_OPTION),
-        "{{PROFILE_DIVISION}}": html.escape(division or ALL_DIVISIONS_OPTION),
-        "{{PROFILE_TRACK}}": html.escape(profile.track if profile else "All tracks"),
-        "{{SELECTED_COUNT}}": str(len(records)),
-        "{{REQUIRED_ELEMENTS}}": str(profile.required_elements) if profile else "N/A",
-        "{{ELEMENT_MIN}}": f"{element_range[0]:.1f}" if element_range else "N/A",
-        "{{ELEMENT_MAX}}": f"{element_range[1]:.1f}" if element_range else "N/A",
-        "{{TOTAL_MIN}}": f"{total_min:.1f}",
-        "{{TOTAL_MAX}}": f"{total_max:.1f}",
-        "{{REQUIREMENTS}}": requirements_html,
-        "{{NOTES}}": notes_html or "<li>No extra notes for this profile.</li>",
-        "{{CARDS}}": "".join(cards),
-    }
-    for placeholder, value in substitutions.items():
-        template = template.replace(placeholder, value)
-    return template
 
 
 PDF_PAGE_STYLE = """
@@ -529,26 +442,14 @@ def render_printable_selection(
         ):
             deselect_record(record.code_number)
             st.rerun()
-    export_html = render_export_html(
-        chosen_records, context.category, profile, context.division, context.source_name
-    )
     export_pdf = render_selection_pdf(chosen_records, context)
-    html_col, pdf_col = st.columns(2)
-    html_col.download_button(
-        "Download printable HTML",
-        data=export_html,
-        file_name="compulsory-selection.html",
-        mime="text/html",
-        use_container_width=True,
-    )
-    pdf_col.download_button(
+    st.download_button(
         "Download selection as PDF",
         data=export_pdf,
         file_name="compulsory-selection.pdf",
         mime="application/pdf",
         use_container_width=True,
     )
-    st.caption("Open the downloaded HTML file in a browser and print to PDF or paper.")
 
 
 def main() -> None:
@@ -572,7 +473,7 @@ def main() -> None:
     if not records:
         st.caption(
             "Upload a Code of Points PDF, shortlist compulsory elements, and "
-            "export a printable selection."
+            "download a printable selection as a PDF."
         )
         st.warning(
             "**Disclaimer:** This project is an unofficial, independent tool and is "
