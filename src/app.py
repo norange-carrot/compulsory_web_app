@@ -172,6 +172,12 @@ CRITERIA_LIST_CSS = """
     object-fit: contain;
     display: block;
 }
+.selection-thumb {
+    height: 32px;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;
+}
 </style>
 """
 
@@ -307,21 +313,27 @@ def render_printable_selection(
         st.rerun()
     st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
     for record in chosen_records:
-        code_col, name_col, section_col, value_col, action_col = st.columns(
-            [0.8, 2.4, 1.2, 1.2, 0.8]
+        code_col, image_col, name_col, section_col, value_col, action_col = st.columns(
+            [0.8, 0.6, 2.4, 1.2, 1.2, 0.8], vertical_alignment="center"
         )
         code_col.markdown(f"**{record.code_number}**")
+        if record.image_bytes:
+            image_b64 = base64.b64encode(record.image_bytes).decode("ascii")
+            image_col.markdown(
+                f'<img src="data:image/png;base64,{image_b64}" '
+                f'alt="{html.escape(record.name)}" class="selection-thumb">',
+                unsafe_allow_html=True,
+            )
         name_col.write(record.name)
         section_col.write(record.section)
         value_col.write(record.technical_value.replace("\n", " / "))
-        criteria_items = "".join(f"<li>{html.escape(line)}</li>" for line in record.criteria_lines)
-        st.markdown(f'<ul class="criteria-list">{criteria_items}</ul>', unsafe_allow_html=True)
         if action_col.button(
             "Deselect",
             key=f"deselect::{record.code_number}",
         ):
             deselect_record(record.code_number)
             st.rerun()
+        st.markdown("<div style='height: 0.6em'></div>", unsafe_allow_html=True)
     export_pdf = render_selection_pdf(chosen_records, context)
     st.download_button(
         "Download selection as PDF",
