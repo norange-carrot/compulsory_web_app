@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import base64
 import html
+import io
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import fitz
 import streamlit as st
 
 if TYPE_CHECKING:
@@ -175,6 +177,103 @@ def render_export_html(
     for placeholder, value in substitutions.items():
         template = template.replace(placeholder, value)
     return template
+
+
+PDF_PAGE_STYLE = """
+<style>
+body { font-family: Georgia, serif; color: #1f2933; }
+h1 { font-size: 22px; margin: 0 0 6px; }
+p.meta { margin: 2px 0; color: #52606d; font-size: 12px; }
+table { border-collapse: collapse; width: 100%; margin-top: 14px; }
+th, td {
+    border: 1px solid #d9e2ec; padding: 6px 8px; font-size: 11px;
+    text-align: left; vertical-align: top;
+}
+th { background: #f8f5ef; }
+td.image-cell { width: 70px; text-align: center; }
+.thumb { width: 60px; height: 60px; object-fit: contain; display: block; margin: 0 auto; }
+ul.criteria { margin: 0; padding-left: 14px; }
+ul.criteria li { margin-bottom: 4px; }
+</style>
+"""
+
+
+def _record_thumbnail_html(record: CatalogRecord) -> str:
+    image_data = record.image_bytes
+    if not image_data:
+        return ""
+    image_b64 = base64.b64encode(image_data).decode("ascii")
+    return (
+        f'<img class="thumb" src="data:image/png;base64,{image_b64}" '
+        f'alt="{html.escape(record.name)}">'
+    )
+
+
+def _record_criteria_html(record: CatalogRecord) -> str:
+    criteria_items = "".join(f"<li>{html.escape(line)}</li>" for line in record.criteria_lines)
+    return f'<ul class="criteria">{criteria_items}</ul>'
+
+
+def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext) -> bytes:
+    """Render the selected elements as a PDF list mirroring the Printable Selection list."""
+    total_min = sum(record.value_min for record in records)
+    total_max = sum(record.value_max for record in records)
+    rows_html = "".join(
+        "".join(
+            [
+                "<tr>",
+                f"<td class='image-cell'>{_record_thumbnail_html(record)}</td>",
+                f"<td>{html.escape(record.code_number)}</td>",
+                f"<td>{html.escape(record.name)}</td>",
+                f"<td>{html.escape(record.section)}</td>",
+                f"<td>{html.escape(record.technical_value.replace(chr(10), ' / '))}</td>",
+                f"<td>{_record_criteria_html(record)}</td>",
+                "</tr>",
+            ]
+        )
+        for record in records
+    )
+    track = context.profile.track if context.profile else "All tracks"
+    body_html = f"""
+<html>
+<head>{PDF_PAGE_STYLE}</head>
+<body>
+<h1>Printable Selection</h1>
+<p class="meta">Source PDF: {html.escape(context.source_name)}</p>
+<p class="meta">
+    {html.escape(context.category or ALL_CATEGORIES_OPTION)} |
+    {html.escape(context.division or ALL_DIVISIONS_OPTION)} |
+    {html.escape(track)}
+</p>
+<p class="meta">
+    Selected count: {len(records)} |
+    Selected total: {format_value_range(total_min, total_max)}
+</p>
+<table>
+<tr>
+    <th>Image</th><th>Code</th><th>Name</th><th>Section</th>
+    <th>Technical value</th><th>Criteria</th>
+</tr>
+{rows_html}
+</table>
+</body>
+</html>
+"""
+    mediabox = fitz.paper_rect("a4")
+    printable_area = mediabox + (36, 36, -36, -36)  # noqa: RUF005 -- fitz.Rect addition, not tuple concat
+
+    def rect_function(
+        rect_num: int,  # noqa: ARG001 -- fixed page layout, every call reuses the same rects
+        filled: fitz.Rect,  # noqa: ARG001
+    ) -> tuple[fitz.Rect, fitz.Rect, fitz.Matrix]:
+        return mediabox, printable_area, fitz.Identity
+
+    buffer = io.BytesIO()
+    writer = fitz.DocumentWriter(buffer)
+    story = fitz.Story(html=body_html)
+    story.write(writer, rect_function)
+    writer.close()
+    return buffer.getvalue()
 
 
 def clear_selected_records() -> None:
@@ -388,6 +487,7 @@ def render_printable_selection(
     if st.button("Deselect all", key="deselect-all-selected-records"):
         clear_selected_records()
         st.rerun()
+    st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
     for record in chosen_records:
         code_col, name_col, section_col, value_col, action_col = st.columns(
             [0.8, 2.4, 1.2, 1.2, 0.8]
@@ -396,6 +496,8 @@ def render_printable_selection(
         name_col.write(record.name)
         section_col.write(record.section)
         value_col.write(record.technical_value.replace("\n", " / "))
+        criteria_items = "".join(f"<li>{html.escape(line)}</li>" for line in record.criteria_lines)
+        st.markdown(f'<ul class="criteria-list">{criteria_items}</ul>', unsafe_allow_html=True)
         if action_col.button(
             "Deselect",
             key=f"deselect::{record.code_number}",
@@ -405,11 +507,20 @@ def render_printable_selection(
     export_html = render_export_html(
         chosen_records, context.category, profile, context.division, context.source_name
     )
-    st.download_button(
+    export_pdf = render_selection_pdf(chosen_records, context)
+    html_col, pdf_col = st.columns(2)
+    html_col.download_button(
         "Download printable HTML",
         data=export_html,
         file_name="compulsory-selection.html",
         mime="text/html",
+        use_container_width=True,
+    )
+    pdf_col.download_button(
+        "Download selection as PDF",
+        data=export_pdf,
+        file_name="compulsory-selection.pdf",
+        mime="application/pdf",
         use_container_width=True,
     )
     st.caption("Open the downloaded HTML file in a browser and print to PDF or paper.")
@@ -449,6 +560,8 @@ def main() -> None:
             "No responsibility is taken for the accuracy or completeness of the "
             "elements shown by this app. This tool must **not** be used when filling "
             "out the official Compulsory Score Form.\n\n"
+        )
+        st.caption(
             "Comments, wishes, or improvement suggestions are very welcome — feel "
             "free to reach out on Instagram "
             "[@norange7](https://www.instagram.com/norange7/)."
