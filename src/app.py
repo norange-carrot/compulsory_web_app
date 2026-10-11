@@ -6,13 +6,10 @@ from __future__ import annotations
 
 import base64
 import html
-import io
 import tempfile
-from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import fitz
 import streamlit as st
 
 if TYPE_CHECKING:
@@ -32,6 +29,12 @@ try:
         Profile,
         ProfileRules,
     )
+    from src.selection_pdf import (
+        ALL_CATEGORIES_OPTION,
+        ALL_DIVISIONS_OPTION,
+        format_value_range,
+        render_selection_pdf,
+    )
 except ImportError:  # pragma: no cover
     from catalog_common import code_sort_key
     from catalog_filter import FilterCriteria, filter_records
@@ -44,11 +47,15 @@ except ImportError:  # pragma: no cover
         Profile,
         ProfileRules,
     )
+    from selection_pdf import (
+        ALL_CATEGORIES_OPTION,
+        ALL_DIVISIONS_OPTION,
+        format_value_range,
+        render_selection_pdf,
+    )
 
 CATALOG_STATE_KEY = "catalog_records"
 SOURCE_STATE_KEY = "catalog_source"
-ALL_CATEGORIES_OPTION = "All categories"
-ALL_DIVISIONS_OPTION = "All divisions"
 ELEMENTS_PER_PAGE = 60
 BROWSER_PAGE_STATE_KEY = "element_browser_page"
 BROWSER_FILTER_SIGNATURE_KEY = "element_browser_filter_signature"
@@ -85,133 +92,6 @@ def selected_records(records: list[CatalogRecord]) -> list[CatalogRecord]:
         for record in records
         if st.session_state.get(selection_key(record.code_number), False)
     ]
-
-
-def format_value_range(value_min: float, value_max: float) -> str:
-    if value_min == value_max:
-        return f"{value_min:.1f}"
-    return f"{value_min:.1f} - {value_max:.1f}"
-
-
-PDF_PAGE_STYLE = """
-<style>
-body { font-family: Georgia, serif; color: #1f2933; }
-h1 { font-size: 22px; margin: 0 0 6px; }
-p.meta { margin: 2px 0; color: #52606d; font-size: 12px; }
-h2.section-title {
-    font-size: 16px; color: #8d5524; margin: 18px 0 6px;
-    border-bottom: 1px solid #d9e2ec; padding-bottom: 2px;
-}
-table { border-collapse: collapse; width: 100%; margin-top: 6px; }
-th, td {
-    border: 1px solid #d9e2ec; padding: 6px 8px; font-size: 11px;
-    text-align: left; vertical-align: top;
-}
-th { background: #f8f5ef; }
-td.image-cell { width: 70px; text-align: center; }
-.thumb { width: 60px; height: 60px; object-fit: contain; display: block; margin: 0 auto; }
-ul.criteria { margin: 0; padding-left: 14px; }
-ul.criteria li { margin-bottom: 4px; }
-</style>
-"""
-
-
-def _record_thumbnail_html(record: CatalogRecord) -> str:
-    image_data = record.image_bytes
-    if not image_data:
-        return ""
-    image_b64 = base64.b64encode(image_data).decode("ascii")
-    return (
-        f'<img class="thumb" src="data:image/png;base64,{image_b64}" '
-        f'alt="{html.escape(record.name)}">'
-    )
-
-
-def _record_criteria_html(record: CatalogRecord) -> str:
-    criteria_items = "".join(f"<li>{html.escape(line)}</li>" for line in record.criteria_lines)
-    return f'<ul class="criteria">{criteria_items}</ul>'
-
-
-def _record_label_html(record: CatalogRecord) -> str:
-    variant_description = record.variant_description
-    variant_html = f"<br><em>{html.escape(variant_description)}</em>" if variant_description else ""
-    return (
-        f"<strong>{html.escape(record.code_number)}</strong><br>"
-        f"{html.escape(record.name)}{variant_html}"
-    )
-
-
-def _section_table_html(section: str, section_records: list[CatalogRecord]) -> str:
-    rows_html = "".join(
-        "".join(
-            [
-                "<tr>",
-                f"<td>{_record_label_html(record)}</td>",
-                f"<td class='image-cell'>{_record_thumbnail_html(record)}</td>",
-                f"<td>{html.escape(record.technical_value.replace(chr(10), ' / '))}</td>",
-                f"<td>{_record_criteria_html(record)}</td>",
-                "</tr>",
-            ]
-        )
-        for record in section_records
-    )
-    return "".join(
-        [
-            f"<h2 class='section-title'>{html.escape(section)}</h2>",
-            "<table>",
-            "<tr><th>Element</th><th>Image</th><th>TV</th><th>Criteria</th></tr>",
-            rows_html,
-            "</table>",
-        ]
-    )
-
-
-def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext) -> bytes:
-    """Render the selected elements as a PDF, grouped into one table per section."""
-    total_min = sum(record.value_min for record in records)
-    total_max = sum(record.value_max for record in records)
-    grouped_records = sorted(
-        records, key=lambda item: (item.section, code_sort_key(item.code_number))
-    )
-    sections_html = "".join(
-        _section_table_html(section, list(section_records))
-        for section, section_records in groupby(grouped_records, key=lambda item: item.section)
-    )
-    track = context.profile.track if context.profile else "All tracks"
-    body_html = f"""
-<html>
-<head>{PDF_PAGE_STYLE}</head>
-<body>
-<h1>Printable Selection</h1>
-<p class="meta">Source PDF: {html.escape(context.source_name)}</p>
-<p class="meta">
-    {html.escape(context.category or ALL_CATEGORIES_OPTION)} |
-    {html.escape(context.division or ALL_DIVISIONS_OPTION)} |
-    {html.escape(track)}
-</p>
-<p class="meta">
-    Selected count: {len(records)} |
-    Selected total: {format_value_range(total_min, total_max)}
-</p>
-{sections_html}
-</body>
-</html>
-"""
-    mediabox = fitz.paper_rect("a4")
-    printable_area = mediabox + (36, 36, -36, -36)  # noqa: RUF005 -- fitz.Rect addition, not tuple concat
-
-    def rect_function(
-        rect_num: int,  # noqa: ARG001 -- fixed page layout, every call reuses the same rects
-        filled: fitz.Rect,  # noqa: ARG001
-    ) -> tuple[fitz.Rect, fitz.Rect, fitz.Matrix]:
-        return mediabox, printable_area, fitz.Identity
-
-    buffer = io.BytesIO()
-    writer = fitz.DocumentWriter(buffer)
-    story = fitz.Story(html=body_html)
-    story.write(writer, rect_function)
-    writer.close()
-    return buffer.getvalue()
 
 
 def clear_selected_records() -> None:
