@@ -8,6 +8,7 @@ import base64
 import html
 import io
 import tempfile
+from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -184,7 +185,11 @@ PDF_PAGE_STYLE = """
 body { font-family: Georgia, serif; color: #1f2933; }
 h1 { font-size: 22px; margin: 0 0 6px; }
 p.meta { margin: 2px 0; color: #52606d; font-size: 12px; }
-table { border-collapse: collapse; width: 100%; margin-top: 14px; }
+h2.section-title {
+    font-size: 16px; color: #8d5524; margin: 18px 0 6px;
+    border-bottom: 1px solid #d9e2ec; padding-bottom: 2px;
+}
+table { border-collapse: collapse; width: 100%; margin-top: 6px; }
 th, td {
     border: 1px solid #d9e2ec; padding: 6px 8px; font-size: 11px;
     text-align: left; vertical-align: top;
@@ -214,24 +219,50 @@ def _record_criteria_html(record: CatalogRecord) -> str:
     return f'<ul class="criteria">{criteria_items}</ul>'
 
 
-def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext) -> bytes:
-    """Render the selected elements as a PDF list mirroring the Printable Selection list."""
-    total_min = sum(record.value_min for record in records)
-    total_max = sum(record.value_max for record in records)
+def _record_label_html(record: CatalogRecord) -> str:
+    variant_description = record.variant_description
+    variant_html = f"<br><em>{html.escape(variant_description)}</em>" if variant_description else ""
+    return (
+        f"<strong>{html.escape(record.code_number)}</strong><br>"
+        f"{html.escape(record.name)}{variant_html}"
+    )
+
+
+def _section_table_html(section: str, section_records: list[CatalogRecord]) -> str:
     rows_html = "".join(
         "".join(
             [
                 "<tr>",
+                f"<td>{_record_label_html(record)}</td>",
                 f"<td class='image-cell'>{_record_thumbnail_html(record)}</td>",
-                f"<td>{html.escape(record.code_number)}</td>",
-                f"<td>{html.escape(record.name)}</td>",
-                f"<td>{html.escape(record.section)}</td>",
                 f"<td>{html.escape(record.technical_value.replace(chr(10), ' / '))}</td>",
                 f"<td>{_record_criteria_html(record)}</td>",
                 "</tr>",
             ]
         )
-        for record in records
+        for record in section_records
+    )
+    return "".join(
+        [
+            f"<h2 class='section-title'>{html.escape(section)}</h2>",
+            "<table>",
+            "<tr><th>Element</th><th>Image</th><th>TV</th><th>Criteria</th></tr>",
+            rows_html,
+            "</table>",
+        ]
+    )
+
+
+def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext) -> bytes:
+    """Render the selected elements as a PDF, grouped into one table per section."""
+    total_min = sum(record.value_min for record in records)
+    total_max = sum(record.value_max for record in records)
+    grouped_records = sorted(
+        records, key=lambda item: (item.section, code_sort_key(item.code_number))
+    )
+    sections_html = "".join(
+        _section_table_html(section, list(section_records))
+        for section, section_records in groupby(grouped_records, key=lambda item: item.section)
     )
     track = context.profile.track if context.profile else "All tracks"
     body_html = f"""
@@ -249,13 +280,7 @@ def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext
     Selected count: {len(records)} |
     Selected total: {format_value_range(total_min, total_max)}
 </p>
-<table>
-<tr>
-    <th>Image</th><th>Code</th><th>Name</th><th>Section</th>
-    <th>Technical value</th><th>Criteria</th>
-</tr>
-{rows_html}
-</table>
+{sections_html}
 </body>
 </html>
 """
