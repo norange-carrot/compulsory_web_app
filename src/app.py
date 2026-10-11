@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import fitz
 import streamlit as st
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ try:
     from src.selection_pdf import (
         ALL_CATEGORIES_OPTION,
         ALL_DIVISIONS_OPTION,
+        DEFAULT_PDF_TITLE,
         format_value_range,
         render_selection_pdf,
     )
@@ -50,6 +52,7 @@ except ImportError:  # pragma: no cover
     from selection_pdf import (
         ALL_CATEGORIES_OPTION,
         ALL_DIVISIONS_OPTION,
+        DEFAULT_PDF_TITLE,
         format_value_range,
         render_selection_pdf,
     )
@@ -334,12 +337,34 @@ def render_printable_selection(
             deselect_record(record.code_number)
             st.rerun()
         st.markdown("<div style='height: 0.6em'></div>", unsafe_allow_html=True)
-    export_pdf = render_selection_pdf(chosen_records, context)
+    if st.button("Download selection as PDF", use_container_width=True):
+        pdf_options_dialog(chosen_records, context)
+
+
+@st.dialog("PDF options", width="large")
+def pdf_options_dialog(chosen_records: list[CatalogRecord], context: SelectionContext) -> None:
+    title = st.text_input("Title", value=DEFAULT_PDF_TITLE)
+    orientation = st.radio("Orientation", ["Portrait", "Landscape"], horizontal=True)
+    notes_column = st.checkbox('Add a "Notes" column at the end', value=False)
+    export_pdf = render_selection_pdf(
+        chosen_records,
+        context,
+        title=title,
+        landscape=orientation == "Landscape",
+        notes_column=notes_column,
+    )
+    with fitz.open(stream=export_pdf, filetype="pdf") as pdf:
+        preview_png = pdf[0].get_pixmap(dpi=80).tobytes("png")
+        page_count = len(pdf)
+    st.caption(f"Preview (page 1 of {page_count})")
+    st.image(preview_png)
     st.download_button(
-        "Download selection as PDF",
+        "Download PDF",
         data=export_pdf,
         file_name="compulsory-selection.pdf",
         mime="application/pdf",
+        on_click="ignore",
+        type="primary",
         use_container_width=True,
     )
 

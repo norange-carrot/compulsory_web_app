@@ -24,6 +24,7 @@ except ImportError:  # pragma: no cover
 
 ALL_CATEGORIES_OPTION = "All categories"
 ALL_DIVISIONS_OPTION = "All divisions"
+DEFAULT_PDF_TITLE = "My Compulsory Selection"
 
 
 def format_value_range(value_min: float, value_max: float) -> str:
@@ -35,20 +36,21 @@ def format_value_range(value_min: float, value_max: float) -> str:
 PDF_PAGE_STYLE = """
 <style>
 body { font-family: Georgia, serif; color: #1f2933; }
-h1 { font-size: 22px; margin: 0 0 6px; }
-p.meta { margin: 2px 0; color: #52606d; font-size: 12px; }
+h1 { font-size: 17px; margin: 0 0 6px; }
+p.meta { margin: 2px 0; color: #52606d; font-size: 9px; }
 h2.section-title {
-    font-size: 16px; color: #8d5524; margin: 18px 0 6px;
+    font-size: 12px; color: #8d5524; margin: 18px 0 6px;
     border-bottom: 1px solid #d9e2ec; padding-bottom: 2px;
 }
 table { border-collapse: collapse; width: 100%; margin-top: 6px; }
 th, td {
-    border: 1px solid #d9e2ec; padding: 6px 8px; font-size: 11px;
+    border: 1px solid #d9e2ec; padding: 4px 6px; font-size: 8px;
     text-align: left; vertical-align: top;
 }
 th { background: #f8f5ef; }
-td.image-cell { width: 70px; text-align: center; }
-.thumb { width: 60px; height: 60px; object-fit: contain; display: block; margin: 0 auto; }
+th.notes, td.notes { width: 200px; }
+td.image-cell { width: 50px; text-align: center; }
+.thumb { width: 44px; height: 44px; object-fit: contain; display: block; margin: 0 auto; }
 ul.criteria { margin: 0; padding-left: 14px; }
 ul.criteria li { margin-bottom: 4px; }
 </style>
@@ -80,7 +82,11 @@ def _record_label_html(record: CatalogRecord) -> str:
     )
 
 
-def _section_table_html(section: str, section_records: list[CatalogRecord]) -> str:
+def _section_table_html(
+    section: str, section_records: list[CatalogRecord], *, notes_column: bool = False
+) -> str:
+    notes_cell = "<td class='notes'></td>" if notes_column else ""
+    notes_header = "<th class='notes'>Notes</th>" if notes_column else ""
     rows_html = "".join(
         "".join(
             [
@@ -89,6 +95,7 @@ def _section_table_html(section: str, section_records: list[CatalogRecord]) -> s
                 f"<td class='image-cell'>{_record_thumbnail_html(record)}</td>",
                 f"<td>{html.escape(record.technical_value.replace(chr(10), ' / '))}</td>",
                 f"<td>{_record_criteria_html(record)}</td>",
+                notes_cell,
                 "</tr>",
             ]
         )
@@ -98,14 +105,21 @@ def _section_table_html(section: str, section_records: list[CatalogRecord]) -> s
         [
             f"<h2 class='section-title'>{html.escape(section)}</h2>",
             "<table>",
-            "<tr><th>Element</th><th>Image</th><th>TV</th><th>Criteria</th></tr>",
+            f"<tr><th>Element</th><th>Image</th><th>TV</th><th>Criteria</th>{notes_header}</tr>",
             rows_html,
             "</table>",
         ]
     )
 
 
-def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext) -> bytes:
+def render_selection_pdf(
+    records: list[CatalogRecord],
+    context: SelectionContext,
+    *,
+    title: str = DEFAULT_PDF_TITLE,
+    landscape: bool = False,
+    notes_column: bool = False,
+) -> bytes:
     """Render the selected elements as a PDF, grouped into one table per section."""
     total_min = sum(record.value_min for record in records)
     total_max = sum(record.value_max for record in records)
@@ -113,7 +127,7 @@ def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext
         records, key=lambda item: (item.section, code_sort_key(item.code_number))
     )
     sections_html = "".join(
-        _section_table_html(section, list(section_records))
+        _section_table_html(section, list(section_records), notes_column=notes_column)
         for section, section_records in groupby(grouped_records, key=lambda item: item.section)
     )
     track = context.profile.track if context.profile else "All tracks"
@@ -121,7 +135,7 @@ def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext
 <html>
 <head>{PDF_PAGE_STYLE}</head>
 <body>
-<h1>Printable Selection</h1>
+<h1>{html.escape(title.strip() or DEFAULT_PDF_TITLE)}</h1>
 <p class="meta">Source PDF: {html.escape(context.source_name)}</p>
 <p class="meta">
     {html.escape(context.category or ALL_CATEGORIES_OPTION)} |
@@ -136,7 +150,7 @@ def render_selection_pdf(records: list[CatalogRecord], context: SelectionContext
 </body>
 </html>
 """
-    mediabox = fitz.paper_rect("a4")
+    mediabox = fitz.paper_rect("a4-l" if landscape else "a4")
     printable_area = mediabox + (36, 36, -36, -36)  # noqa: RUF005 -- fitz.Rect addition, not tuple concat
 
     def rect_function(
