@@ -47,7 +47,7 @@ th, td {
     border: 1px solid #d9e2ec; padding: 4px 6px; font-size: 8px;
     text-align: left; vertical-align: top;
 }
-th { background: #f8f5ef; }
+th { font-weight: bold; }
 th.notes, td.notes { width: 200px; }
 td.image-cell { width: 50px; text-align: center; }
 .thumb { width: 44px; height: 44px; object-fit: contain; display: block; margin: 0 auto; }

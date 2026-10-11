@@ -361,7 +361,7 @@ def pdf_options_dialog(chosen_records: list[CatalogRecord], context: SelectionCo
     st.download_button(
         "Download PDF",
         data=export_pdf,
-        file_name="compulsory-selection.pdf",
+        file_name=f"{title}.pdf",
         mime="application/pdf",
         on_click="ignore",
         type="primary",
