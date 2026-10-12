@@ -1,3 +1,9 @@
+## v0.9.0 (2026-10-12)
+
+### Feat
+
+- **#26**: add pagination arrows on bottom
+
 ## v0.8.0 (2026-10-09)
 
 ### Feat
