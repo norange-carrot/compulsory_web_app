@@ -185,9 +185,39 @@ CRITERIA_LIST_CSS = """
 """
 
 
+def render_pagination_bar(
+    *, position: str, current_page: int, total_pages: int, record_count: int
+) -> None:
+    # `position` ("top"/"bottom") keeps widget keys unique so the bar can be
+    # rendered both above and below the visible elements.
+    prev_col, label_col, next_col = st.columns([1, 2, 1])
+    with prev_col:
+        if st.button(
+            "Previous",
+            disabled=current_page <= 1,
+            key=f"element-browser-prev-{position}",
+        ):
+            st.session_state[BROWSER_PAGE_STATE_KEY] = current_page - 1
+            st.rerun()
+    with label_col:
+        st.markdown(
+            f"<div style='text-align:center'>Page {current_page} of {total_pages} "
+            f"({record_count} elements)</div>",
+            unsafe_allow_html=True,
+        )
+    with next_col:
+        if st.button(
+            "Next",
+            disabled=current_page >= total_pages,
+            key=f"element-browser-next-{position}",
+        ):
+            st.session_state[BROWSER_PAGE_STATE_KEY] = current_page + 1
+            st.rerun()
+
+
 def paginate_records(
     records: list[CatalogRecord], filter_signature: tuple[Any, ...]
-) -> list[CatalogRecord]:
+) -> tuple[list[CatalogRecord], int, int]:
     if st.session_state.get(BROWSER_FILTER_SIGNATURE_KEY) != filter_signature:
         st.session_state[BROWSER_FILTER_SIGNATURE_KEY] = filter_signature
         st.session_state[BROWSER_PAGE_STATE_KEY] = 1
@@ -196,24 +226,9 @@ def paginate_records(
     current_page = min(max(current_page, 1), total_pages)
     st.session_state[BROWSER_PAGE_STATE_KEY] = current_page
 
-    prev_col, label_col, next_col = st.columns([1, 2, 1])
-    with prev_col:
-        if st.button("Previous", disabled=current_page <= 1, key="element-browser-prev"):
-            st.session_state[BROWSER_PAGE_STATE_KEY] = current_page - 1
-            st.rerun()
-    with label_col:
-        st.markdown(
-            f"<div style='text-align:center'>Page {current_page} of {total_pages} "
-            f"({len(records)} elements)</div>",
-            unsafe_allow_html=True,
-        )
-    with next_col:
-        if st.button("Next", disabled=current_page >= total_pages, key="element-browser-next"):
-            st.session_state[BROWSER_PAGE_STATE_KEY] = current_page + 1
-            st.rerun()
-
     start = (current_page - 1) * ELEMENTS_PER_PAGE
-    return records[start : start + ELEMENTS_PER_PAGE]
+    visible_records = records[start : start + ELEMENTS_PER_PAGE]
+    return visible_records, current_page, total_pages
 
 
 def render_record_card(record: CatalogRecord) -> None:
@@ -265,10 +280,22 @@ def render_element_browser(records: list[CatalogRecord], filter_signature: tuple
     if not records:
         st.warning("No elements match the current filters.")
         return
-    visible_records = paginate_records(records, filter_signature)
+    visible_records, current_page, total_pages = paginate_records(records, filter_signature)
+    render_pagination_bar(
+        position="top",
+        current_page=current_page,
+        total_pages=total_pages,
+        record_count=len(records),
+    )
     st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
     for record in visible_records:
         render_record_card(record)
+    render_pagination_bar(
+        position="bottom",
+        current_page=current_page,
+        total_pages=total_pages,
+        record_count=len(records),
+    )
 
 
 def render_printable_selection(
