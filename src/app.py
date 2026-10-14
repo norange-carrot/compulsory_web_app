@@ -451,8 +451,8 @@ def pdf_options_dialog(chosen_records: list[CatalogRecord], context: SelectionCo
 
 
 def main() -> None:
-    st.set_page_config(page_title="Code of Points Helper", layout="wide")
-    st.title("Code of Points Helper")
+    st.set_page_config(page_title="PoleElement Selector", layout="wide")
+    st.title("PoleElement Selector")
 
     st.sidebar.header("Catalog Source")
     uploaded_pdf = st.sidebar.file_uploader(
