@@ -1,3 +1,9 @@
+## v0.10.0 (2026-10-14)
+
+### Feat
+
+- **#25**: reserve space for selected elements to prevent movement (#28)
+
 ## v0.9.0 (2026-10-12)
 
 ### Feat
