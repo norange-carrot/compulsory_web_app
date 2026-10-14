@@ -153,10 +153,22 @@ def page_image_placements(page: fitz.Page) -> list[dict[str, Any]]:
     window derived from text positions) is what lets us match each row to its
     exact illustration, with no bleed from neighboring rows or text columns.
     """
+    # Images above the table header (e.g. the intro illustration on the first
+    # catalog page) are not row illustrations and must not be merged into row 1.
+    header_bottom = max(
+        (
+            block[3]
+            for block in page.get_text("blocks")
+            if TABLE_HEADER_RE.match(compact_whitespace(block[4]))
+        ),
+        default=0.0,
+    )
     placements: list[dict[str, Any]] = []
     for xref, *_ in page.get_images(full=True):
         for rect in page.get_image_rects(xref):
             if rect.width < MAX_IMAGE_SIZE or rect.height < MAX_IMAGE_SIZE:
+                continue
+            if rect.y1 <= header_bottom:
                 continue
             placements.append({"xref": xref, "rect": rect})
     placements.sort(key=lambda item: (item["rect"].y0, item["rect"].x0))

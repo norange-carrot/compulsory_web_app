@@ -474,16 +474,20 @@ def main() -> None:
             "download a printable selection as a PDF."
         )
         st.warning(
+            "No responsibility is taken for the accuracy or completeness of the "
+            "elements shown by this app. This tool must **not** be used when filling "
+            "out the official Compulsory Score Form.\n\n"
+            "This app will most probably only work with the english version of the Code "
+            "of Points PDF."
+        )
+        st.warning(
             "**Disclaimer:** This project is an unofficial, independent tool and is "
             "**not affiliated with, endorsed by, or sponsored by** the International "
             "Pole Sports Federation (IPSF) or any other rulebook publisher.\n\n"
             "The Code of Points PDF is copyrighted material owned by its publisher. "
             "This app does not include or distribute that PDF. You must supply your "
             "own legally obtained copy and upload it in the sidebar, then click "
-            "'Extract Uploaded PDF' to get started.\n\n"
-            "No responsibility is taken for the accuracy or completeness of the "
-            "elements shown by this app. This tool must **not** be used when filling "
-            "out the official Compulsory Score Form.\n\n"
+            "'Extract Uploaded PDF' to get started. \n\n"
         )
         st.caption(
             "Comments, wishes, or improvement suggestions are very welcome — feel "
