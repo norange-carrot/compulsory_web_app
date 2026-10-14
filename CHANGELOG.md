@@ -1,3 +1,9 @@
+## v0.10.1 (2026-10-14)
+
+### Fix
+
+- **frontend**: tiny fixes on wording and image extraction
+
 ## v0.10.0 (2026-10-14)
 
 ### Feat
