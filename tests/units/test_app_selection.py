@@ -61,6 +61,7 @@ def test_clear_selected_records_removes_all_selections(monkeypatch):
         app.selection_widget_key("S1"): True,
         app.selection_key("S2"): True,
         app.selection_widget_key("S2"): True,
+        app.PRINTABLE_SELECTION_EXPANDED_KEY: True,
         "unrelated-state": "preserved",
     }
     monkeypatch.setattr(app.st, "session_state", session_state)
@@ -68,4 +69,5 @@ def test_clear_selected_records_removes_all_selections(monkeypatch):
     app.clear_selected_records()
 
     assert not any(key.startswith(("selected::", "selection-widget::")) for key in session_state)
+    assert app.PRINTABLE_SELECTION_EXPANDED_KEY not in session_state
     assert session_state["unrelated-state"] == "preserved"

@@ -62,6 +62,10 @@ SOURCE_STATE_KEY = "catalog_source"
 ELEMENTS_PER_PAGE = 60
 BROWSER_PAGE_STATE_KEY = "element_browser_page"
 BROWSER_FILTER_SIGNATURE_KEY = "element_browser_filter_signature"
+PRINTABLE_SELECTION_PREVIEW_COUNT = 3
+PRINTABLE_SELECTION_EXPANDED_KEY = "printable_selection_expanded"
+PRINTABLE_SELECTION_PREVIEW_HEIGHT = 230
+PRINTABLE_SELECTION_STATUS_HEIGHT = 130
 
 
 def extract_catalog_from_pdf(pdf_bytes: bytes) -> list[CatalogRecord]:
@@ -101,6 +105,7 @@ def clear_selected_records() -> None:
     for key in list(st.session_state):
         if isinstance(key, str) and key.startswith(("selected::", "selection-widget::")):
             del st.session_state[key]
+    st.session_state.pop(PRINTABLE_SELECTION_EXPANDED_KEY, None)
 
 
 def deselect_record(code_number: str) -> None:
@@ -298,30 +303,67 @@ def render_element_browser(records: list[CatalogRecord], filter_signature: tuple
     )
 
 
-def render_printable_selection(
-    records: list[CatalogRecord],
+def render_selected_record_row(record: CatalogRecord) -> None:
+    code_col, image_col, name_col, section_col, value_col, action_col = st.columns(
+        [0.8, 0.6, 2.4, 1.2, 1.2, 0.8], vertical_alignment="center"
+    )
+    code_col.markdown(f"**{record.code_number}**")
+    if record.image_bytes:
+        image_b64 = base64.b64encode(record.image_bytes).decode("ascii")
+        image_col.markdown(
+            f'<img src="data:image/png;base64,{image_b64}" '
+            f'alt="{html.escape(record.name)}" class="selection-thumb">',
+            unsafe_allow_html=True,
+        )
+    name_col.write(record.name)
+    section_col.write(record.section)
+    value_col.write(record.technical_value.replace("\n", " / "))
+    if action_col.button(
+        "Deselect",
+        key=f"deselect::{record.code_number}",
+    ):
+        deselect_record(record.code_number)
+        st.rerun()
+    st.markdown("<div style='height: 0.6em'></div>", unsafe_allow_html=True)
+
+
+def render_selection_actions(
+    chosen_records: list[CatalogRecord],
     context: SelectionContext,
     *,
-    show_division_rules: bool,
+    extra_count: int,
+    expanded: bool,
 ) -> None:
+    # Always rendered (disabled when not applicable) so the layout stays stable.
+    if expanded:
+        toggle_label = "Show fewer elements"
+    elif extra_count > 0:
+        toggle_label = f"Show {extra_count} more element{'s' if extra_count != 1 else ''}"
+    else:
+        toggle_label = "Show more elements"
+    if st.button(
+        toggle_label,
+        key="toggle-printable-selection-expanded",
+        disabled=extra_count <= 0,
+    ):
+        st.session_state[PRINTABLE_SELECTION_EXPANDED_KEY] = not expanded
+        st.rerun()
+    if st.button(
+        "Download selection as PDF",
+        use_container_width=True,
+        disabled=not chosen_records,
+    ):
+        pdf_options_dialog(chosen_records, context)
+
+
+def render_selection_status(chosen_records: list[CatalogRecord], context: SelectionContext) -> None:
     profile = context.profile
-    division_rules = (
-        profile.divisions[context.division]
-        if profile is not None and context.division is not None
-        else None
-    )
-    chosen_records = selected_records(records)
-    st.subheader("Printable Selection")
-    if not chosen_records:
-        st.info("Select one or more elements to build the printable output.")
+    if profile is None or context.division is None:
         return
-    chosen_records.sort(key=lambda item: code_sort_key(item.code_number))
+    division_rules = profile.divisions[context.division]
     selected_min = sum(record.value_min for record in chosen_records)
     selected_max = sum(record.value_max for record in chosen_records)
-    summary_left, summary_mid = st.columns(2)
-    summary_left.metric("Selected count", len(chosen_records))
-    summary_mid.metric("Selected total", f"{selected_min:.1f}")
-    if show_division_rules and profile is not None and division_rules is not None:
+    with st.container(height=PRINTABLE_SELECTION_STATUS_HEIGHT, border=False):
         if len(chosen_records) != profile.required_elements:
             st.warning(
                 f"This profile expects {profile.required_elements} elements, but "
@@ -338,34 +380,46 @@ def render_printable_selection(
                 f"The selected total range overlaps the required total range of "
                 f"{total_low:.1f} to {total_high:.1f}."
             )
-    if st.button("Deselect all", key="deselect-all-selected-records"):
+
+
+def render_printable_selection(
+    records: list[CatalogRecord],
+    context: SelectionContext,
+    *,
+    show_division_rules: bool,
+) -> None:
+    chosen_records = selected_records(records)
+    chosen_records.sort(key=lambda item: code_sort_key(item.code_number))
+    st.subheader("Printable Selection")
+    summary_left, summary_mid = st.columns(2)
+    summary_left.metric("Selected count", len(chosen_records))
+    summary_mid.metric("Selected total", f"{sum(r.value_min for r in chosen_records):.1f}")
+    if show_division_rules:
+        render_selection_status(chosen_records, context)
+    if st.button(
+        "Deselect all",
+        key="deselect-all-selected-records",
+        disabled=not chosen_records,
+    ):
         clear_selected_records()
         st.rerun()
     st.markdown(CRITERIA_LIST_CSS, unsafe_allow_html=True)
-    for record in chosen_records:
-        code_col, image_col, name_col, section_col, value_col, action_col = st.columns(
-            [0.8, 0.6, 2.4, 1.2, 1.2, 0.8], vertical_alignment="center"
-        )
-        code_col.markdown(f"**{record.code_number}**")
-        if record.image_bytes:
-            image_b64 = base64.b64encode(record.image_bytes).decode("ascii")
-            image_col.markdown(
-                f'<img src="data:image/png;base64,{image_b64}" '
-                f'alt="{html.escape(record.name)}" class="selection-thumb">',
-                unsafe_allow_html=True,
-            )
-        name_col.write(record.name)
-        section_col.write(record.section)
-        value_col.write(record.technical_value.replace("\n", " / "))
-        if action_col.button(
-            "Deselect",
-            key=f"deselect::{record.code_number}",
-        ):
-            deselect_record(record.code_number)
-            st.rerun()
-        st.markdown("<div style='height: 0.6em'></div>", unsafe_allow_html=True)
-    if st.button("Download selection as PDF", use_container_width=True):
-        pdf_options_dialog(chosen_records, context)
+    extra_count = len(chosen_records) - PRINTABLE_SELECTION_PREVIEW_COUNT
+    expanded = extra_count > 0 and st.session_state.get(PRINTABLE_SELECTION_EXPANDED_KEY, False)
+    visible_chosen_records = (
+        chosen_records if expanded else chosen_records[:PRINTABLE_SELECTION_PREVIEW_COUNT]
+    )
+    rows_container = (
+        st.container()
+        if expanded
+        else st.container(height=PRINTABLE_SELECTION_PREVIEW_HEIGHT, border=False)
+    )
+    with rows_container:
+        if not chosen_records:
+            st.info("Select one or more elements to build the printable output.")
+        for record in visible_chosen_records:
+            render_selected_record_row(record)
+    render_selection_actions(chosen_records, context, extra_count=extra_count, expanded=expanded)
 
 
 @st.dialog("PDF options", width="large")
